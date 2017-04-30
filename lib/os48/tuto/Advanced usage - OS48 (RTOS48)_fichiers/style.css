@@ -1,0 +1,9 @@
+.navbar-brand
+{
+	display:none;
+}
+
+.active>a
+{
+	font-weight: normal !important;
+}
