@@ -10,7 +10,7 @@ void _creeLigneMenuSelectSondeV3(uint8_t i, char* chaine, uint8_t taille, void* 
     i--; // comme la première ligne est la sonde AUCUNE ... on décrémente i pour correspondre à la liste
     if( data->sonde[i].isSondeTemp()){
 
-      if ( data->temperature[i] > TEMP_NON_LUE) temp = data->sonde[i].litTemperature();
+      if ( data->temperature[i] > TEMP_NON_LUE) temp = data->sonde[i].getTemperature();
       else temp = data->temperature[i];
 
       if (data->sonde[i].isDS3231()) { // si sonde interne au DS3231(RTC)
@@ -87,7 +87,7 @@ void _creeLigneMenuSelectSondeV2(uint8_t i, char* chaine, uint8_t taille, void* 
     i--; // comme la première ligne est la sonde AUCUNE ... on décrémente i pour correspondre à la liste
     if( data->sonde[i].isSondeTemp()){
 
-      if ( data->temperature[i] > TEMP_NON_LUE) temp = data->sonde[i].litTemperature();
+      if ( data->temperature[i] > TEMP_NON_LUE) temp = data->sonde[i].getTemperature();
       else temp = data->temperature[i];
 
       if (data->sonde[i].isDS3231()) { // si sonde interne au DS3231(RTC)

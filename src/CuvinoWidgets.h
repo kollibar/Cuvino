@@ -174,7 +174,7 @@ bool CuvinoWidgets<T>::menuCalibrageSonde(SondeV2& sonde,const byte& nom_cuve) {
           return false;
         }
         if( touche == BT_SELECT || touche==BT_BAS || touche == BT_HAUT) break;
-        tempMesure=sonde.litTemperature(false);
+        tempMesure=sonde.getTemperature(false);
         display->setCursor(9*6,16);
         display->printTemp16e(tempMesure,1);
         display->setCursor(9*6,24);
@@ -275,7 +275,7 @@ bool CuvinoWidgets<T>::menuCalibrageSonde(Sonde& sonde,const byte& nom_cuve) {
           return false;
         }
         if( touche == BT_SELECT || touche==BT_BAS || touche == BT_HAUT) break;
-        tempMesure=sonde.litTemperature(false);
+        tempMesure=sonde.getTemperature(false);
         display->setCursor(9*6,16);
         display->printTemp16e(tempMesure,1);
         display->setCursor(9*6,24);
@@ -612,7 +612,7 @@ bool CuvinoWidgets<T>::menuSelectSondeV2(Cuve& cuve,const Cuve listeCuve[],const
   for (unsigned char i = 0; i < data.nb; ++i) {
 
     if( data.sonde[i].isDS3231()){
-      data.temperature[i]=data.sonde[i].litTemperature(); // si DS3231 lecture directe de la température
+      data.temperature[i]=data.sonde[i].getTemperature(); // si DS3231 lecture directe de la température
     }else{
       data.sonde[i].demandeMesureTemp(); // sinon demande une mesure de la temperature de la sonde i
       data.temperature[i] = TEMP_NON_LUE;

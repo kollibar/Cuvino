@@ -206,7 +206,7 @@ void CuvinoCore::controlTemp(void) {
       /*if (listeCuve[i].sonde.isSondeTemp()) {
         listeCuve[i].sonde.demandeMesureTemp();
         vTaskDelay(800 / portTICK_PERIOD_MS);
-        temp = listeCuve[i].sonde.litTemperature();
+        temp = listeCuve[i].sonde.getTemperature();
       }
       else if (listeCuve[i].sonde.addr[0] == 0) temp = TEMP_ERREUR_ABS_SONDE;
       else temp = TEMP_ERREUR_PAS_SONDE;
@@ -1063,7 +1063,7 @@ void CuvinoGUI::actualiseAffTemp(signed int i, signed int pos){
 
 
   if (i == NB_LIGNE_MAX || (i == 3 && listeCuve[3].tempConsigneCuve == TEMP_LIGNE_NON_CONFIGURE && listeCuve[NB_LIGNE_MAX].sonde->isSondeTemp() ) ) {
-    signed int temp=listeCuve[NB_LIGNE_MAX].litTemperature();
+    signed int temp=listeCuve[NB_LIGNE_MAX].getTemperature();
     if( temp > TEMP_NON_LUE) widgets.printTemp(temp, p.x, p.y);
     if( horlogeOK ){
       display.setCursor(p.x, p.y-8);
@@ -1428,7 +1428,7 @@ void CuvinoGUI::_actualiseTemp_menuConfigCuve(void* arg) {
   /* fonction appellé toutes les secondes pour actualiser l'affichage de la température dans le cadre des fonctions menuConfigCuve et menuConfigLocal */
   structDataMenuConfigCuve* data = (structDataMenuConfigCuve*)arg;
 
-  data->temperature = data->cuve->litTemperature();
+  data->temperature = data->cuve->getTemperature();
   widgets.affLigneSelectSonde( data->y, data->cuve->sonde->addr, data->temperature);
   display.display();
   data->cuve->demandeMesureTemp();

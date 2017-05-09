@@ -102,26 +102,29 @@ bool CuveV2::estConfigure() {
   return (tempConsigneCuve != TEMP_LIGNE_NON_CONFIGURE && tempConsigneCuve != TEMP_SONDE_NON_CONFIGURE && (EV_F.estConfigure() || EV_C.estConfigure()));
 }
 
-signed int CuveV2::waitForMesure(){
-  if( this->sonde == NULL ) return TEMP_ERREUR;
-  if( ! this->sonde->isSondeTemp() ) return TEMP_ERREUR;
-  mesure = this->sonde->waitForMesure();
-  dateMesure=millis();
-  return mesure;
+bool CuveV2::setConsigned(signed int c){
+  this->tempConsigneCuve=c;
+  return true;
+}
+
+bool CuveV2::setArret(signed int c){
+  this->tempConsigneCuve=c;
+  return true;
+}
+
+signed int CuveV2::getConsigne(){
+  return this->tempConsigneCuve;
+}
+
+unsigned long CuveV2::timeToWait(){
+  if( this->sonde == NULL ) return 0;
+  else return this->sonde->timeToWait();
 }
 
 bool CuveV2::demandeMesureTemp(){
   if( this->sonde == NULL ) return TEMP_ERREUR;
   if( ! this->sonde->isSondeTemp() ) return TEMP_ERREUR;
   return this->sonde->demandeMesureTemp();
-}
-
-signed int CuveV2::litTemperature(){
-  if( this->sonde == NULL ) return TEMP_ERREUR;
-  if( ! this->sonde->isSondeTemp() ) return TEMP_ERREUR;
-  mesure = this->sonde->litTemperature();
-  dateMesure=millis();
-  return mesure;
 }
 
 signed int CuveV2::getTemperature(){
@@ -149,9 +152,9 @@ signed int CuveV2::getTemperature(){
   }
 
 
-  mesure=this->sonde->litTemperature();
+  mesure=this->sonde->getTemperature();
   */
-  mesure=this->sonde->waitForMesure();
+  mesure=this->sonde->getTemperature();
   dateMesure=millis();
 
   return mesure;
@@ -177,7 +180,7 @@ bool CuveV2::controlTemp(int decalage){
   if (this->sonde->isSondeTemp()) {
     /*this->sonde->demandeMesureTemp();
     vTaskDelay( (750 / (this->sonde->getPrecision() + 1)) / portTICK_PERIOD_MS);
-    temp = this->sonde->litTemperature();*/
+    temp = this->sonde->getTemperature();*/
     temp=this->getTemperature();
     // A FAIRE si plus de 2 erreur de lecture de température..
     #ifdef DEBUG

@@ -63,11 +63,14 @@ public:
   SondeV2(OneWire*, signed char num, unsigned char _addr[8]);
   SondeV2(OneWire*, signed char num);
 
-  bool demandeMesureTemp();
-  bool mesureFaite();
-  signed int waitForMesure(const bool correction = true);
+  bool demandeMesureTemp(); // demande une mesure de température à la sonde
+  bool mesureFaite();       // demande si la lecture de température est valide
+  unsigned long tempsDerniereMesure();  // temps écoulé depuis la dernière mesure
+  unsigned long timeToWait(); // retourne le temps à attendre avant que la mesure soit disponible. Si la mesure n'est plus valide demande une nouvelle mesure
+
   signed int litTemperature(const bool correction = true);
-  signed int getTemperature(const bool correction = true);
+  signed int getTemperature(const bool correction = true); // récupère la température calculé par la sonde, si besoin demande un nouveau calcul, si besoin attends le temps que le calcul soit effectué
+
   signed int correctionMesure(signed int mesure);
   bool calcCorrection(signed int mesure,signed int tempReelle);
   bool calcCorrection(signed int mesure1,signed int tempReelle1,signed int mesure2,signed int tempReelle2);

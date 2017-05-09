@@ -198,7 +198,7 @@ bool SondeV2::load(BlocMem* bloc,unsigned char v) {
 }*/
 
 void SondeV2::print(HardwareSerial& serial){
-  serial.print("SondeV2(");
+  serial.print(F("SondeV2("));
   serial.print(num);
   serial.print(',');
   for(unsigned char i=0;i<8;++i) {
@@ -208,17 +208,17 @@ void SondeV2::print(HardwareSerial& serial){
   serial.println(')');
 
   if( isSondeTemp() ){
-    serial.print("! isSondeTemp ");
-    if( isDS3231() ) serial.print("isDS3231");
-    else if( isDS18B20() ) serial.print("isDS18B20");
+    serial.print(F("! isSondeTemp "));
+    if( isDS3231() ) serial.print(F("isDS3231"));
+    else if( isDS18B20() ) serial.print(F("isDS18B20"));
   } else{
-    serial.print("! isSondeTemp ");
+    serial.print(F("! isSondeTemp "));
   }
   serial.println();
 }
 
 void SondeV2::print(DebugLogger& debug){
-  debug.print("SondeV2(");
+  debug.print(F("SondeV2("));
   debug.print(num);
   debug.print(',');
   for(unsigned char i=0;i<8;++i) {
@@ -227,11 +227,11 @@ void SondeV2::print(DebugLogger& debug){
   }
   debug.println(')');
   if( isSondeTemp() ){
-    debug.print("! isSondeTemp ");
-    if( isDS3231() ) debug.print("isDS3231");
-    else if( isDS18B20() ) debug.print("isDS18B20");
+    debug.print(F("! isSondeTemp "));
+    if( isDS3231() ) debug.print(F("isDS3231"));
+    else if( isDS18B20() ) debug.print(F("isDS18B20"));
   } else{
-    debug.print("! isSondeTemp ");
+    debug.print(F("! isSondeTemp "));
   }
   debug.println();
 }
@@ -256,42 +256,24 @@ bool SondeV2::mesureFaite(){
   return ((millis() - date) > (750 / (this->precision+1)) && (millis() - date) < 5000);
 }
 
-signed int SondeV2::waitForMesure(const bool correction) {
-  if( !isSondeTemp() )return TEMP_ERREUR;
-  if( isDS3231() ) return litTemperature(correction);
+unsigned long SondeV2::tempsDerniereMesure(){
+  unsigned long tps=(millis() - date);
+  if( tps < (750/this->precision+1) ) return 0xFFFFFFFF;
+  return tps;
+}
+
+unsigned long SondeV2::timeToWait(){
+  if( ! isSondeTemp() ) return 0xFFFFFFFF;
+  if( isDS3231() )return 0;
+
 
   unsigned long delai = millis() - date;
-  if( delai > (750 / (this->precision+1)) && delai < 5000 ) return litTemperature(correction); // mesure déjà faite
-
-  if( delai > (750 / (this->precision+1)))  {
-    demandeMesureTemp(); // si pas de mesure déjà faite on en demande une
-    delai=(750 / (this->precision+1));
-  } else {
-    delai=(750 / (this->precision+1))-delai;
+  if( delai > 5000 ) { // si la mesure n'est plus valide
+    delai=0;
+    this->demandeMesureTemp();
   }
 
-  if( delai >= 0){
-    if( xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED ){
-      delay(delai); // si le noyau FreeRTOS est inactif
-    } else {
-      vTaskDelay( delai / portTICK_PERIOD_MS ); // si le noyau FreeRTOS est actif
-    }
-  }
-
-  signed int mesure =litTemperature(correction);
-
-  if( mesure == 1360 ){ // erreur de mesure, on réessaye une 2e fois (seulement une 2e fois)
-    demandeMesureTemp();
-    delai=(750 / (this->precision+1));
-    if( xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED ){
-      delay(delai); // si le noyau FreeRTOS est inactif
-    } else {
-      vTaskDelay( delai / portTICK_PERIOD_MS ); // si le noyau FreeRTOS est actif
-    }
-    mesure=litTemperature(correction);
-  }
-
-  return mesure;
+  return (750 / (this->precision+1)) - delai;
 }
 
 signed int SondeV2::litTemperature(const bool correction) {
@@ -320,17 +302,16 @@ signed int SondeV2::litTemperature(const bool correction) {
 }
 
 signed int SondeV2::getTemperature(const bool correction) {
-  /* demande une mesure de la température et attend (800ms) que la mesure soit faite, puis retourne la valeur */
+  /* demande une mesure de la température et attend (750ms) que la mesure soit faite, puis retourne la valeur */
 
   if (addr[0] != DS18B20) { // Vérifie qu'il s'agit bien d'un DS18B20
     if( isDS3231() ) return getTemperatureDS3231(); // si il s'agit de DS3231 (RTC avec compensation de température)
-    //if (addrIsDS3231(addr)) return getTemperatureDS3231();
     return TEMP_ERREUR;   // Si ce n'est pas le cas on retourne une erreur
   }
 
   unsigned long delai=750 / (this->precision+1);
 
-  if( millis() - date < delai){ // une demande de mesure de température a été effctuée il y a moins de 800 ms
+  if( millis() - date < delai){ // une demande de mesure a déjà été faite et est toujours valide
     delai=delai-(millis()-date);
   } else { // sinon on fait une demande de mesure de température
     demandeMesureTemp();
@@ -343,9 +324,9 @@ signed int SondeV2::getTemperature(const bool correction) {
     vTaskDelay( delai / portTICK_PERIOD_MS ); // si le noyau FreeRTOS est actif
   }
 
-  signed long mesure=litTemperature(correction);
+  signed long mesure=litTemperature(correction); // lecture de la mesure
 
-  if( mesure == 1360 ){ // erreur de mesure, on réessaye une 2e fois (seulement une 2e fois)
+  if( mesure == 1360 || mesure < (-20*16) || mesure > (100*16) ){ // erreur de mesure, on réessaye une 2e fois (seulement une 2e fois)
     demandeMesureTemp();
     if( xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED ){
       delay(delai); // si le noyau FreeRTOS est inactif
@@ -360,9 +341,9 @@ signed int SondeV2::getTemperature(const bool correction) {
 
 signed int SondeV2::correctionMesure(signed int mesure){
   #ifdef DEBUG
-  debugSondeV2.print("correctionMesure(");
+  debugSondeV2.print(F("correctionMesure("));
   debugSondeV2.print(mesure);
-  debugSondeV2.print(")=>");
+  debugSondeV2.print(F(")=>"));
   #endif
   if( this->a != 0 ){
     mesure=(signed int)(((255+(signed long)a)*(signed long)mesure)/255);
@@ -372,11 +353,11 @@ signed int SondeV2::correctionMesure(signed int mesure){
   }
   #ifdef DEBUG
   debugSondeV2.print(mesure);
-  debugSondeV2.print(" (a=");
+  debugSondeV2.print(F(" (a="));
   debugSondeV2.print(a);
-  debugSondeV2.print(", b=");
+  debugSondeV2.print(F(", b="));
   debugSondeV2.print(b);
-  debugSondeV2.println(")");
+  debugSondeV2.println(')');
   #endif
   return mesure;
 }
@@ -385,13 +366,13 @@ bool SondeV2::calcCorrection(signed int mesure,signed int tempReelle){
   this->a=0;
   this->b=(signed char)(tempReelle-mesure);
   #ifdef DEBUG
-  debugSondeV2.print("calcCorrection(");
+  debugSondeV2.print(F("calcCorrection("));
   debugSondeV2.print(mesure);
-  debugSondeV2.print(",");
+  debugSondeV2.print(',');
   debugSondeV2.print(tempReelle);
-  debugSondeV2.print(")=>a=");
+  debugSondeV2.print(F(")=>a="));
   debugSondeV2.print(this->a);
-  debugSondeV2.print(",b=");
+  debugSondeV2.print(F(",b="));
   debugSondeV2.println(this->b);
   #endif
   return true;
@@ -401,17 +382,17 @@ bool SondeV2::calcCorrection(signed int mesure1,signed int tempReelle1,signed in
   this->a=(signed char)((255*tempReelle1-255*tempReelle1)/(mesure1-mesure2)-255);
   this->b=(signed char)(tempReelle1-(((255+(signed long)a)*mesure1)/255));
   #ifdef DEBUG
-  debugSondeV2.print("calcCorrection(");
+  debugSondeV2.print(F("calcCorrection("));
   debugSondeV2.print(mesure1);
-  debugSondeV2.print(",");
+  debugSondeV2.print(',');
   debugSondeV2.print(tempReelle1);
-  debugSondeV2.print(",");
+  debugSondeV2.print(',');
   debugSondeV2.print(mesure2);
-  debugSondeV2.print(",");
+  debugSondeV2.print(',');
   debugSondeV2.print(tempReelle2);
-  debugSondeV2.print(")=>a=");
+  debugSondeV2.print(F(")=>a="));
   debugSondeV2.print(this->a);
-  debugSondeV2.print(",b=");
+  debugSondeV2.print(F(",b="));
   debugSondeV2.println(this->b);
   #endif
   return true;

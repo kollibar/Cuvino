@@ -50,8 +50,11 @@ class CuveV2 {
     bool controlTemp(signed int decalage=0);
     signed int getTemperature();
     bool demandeMesureTemp();
-    signed int waitForMesure();
-    signed int litTemperature();
+    unsigned long timeToWait();
+
+    signed int getConsigne();
+    bool setConsigned(signed int c);
+    bool setArret(signed int c);
 
     signed int getEcart();
     bool setPrecisionMesure(unsigned char precision);
