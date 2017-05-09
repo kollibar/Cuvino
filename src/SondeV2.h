@@ -68,16 +68,16 @@ public:
   unsigned long tempsDerniereMesure();  // temps écoulé depuis la dernière mesure
   unsigned long timeToWait(); // retourne le temps à attendre avant que la mesure soit disponible. Si la mesure n'est plus valide demande une nouvelle mesure
 
-  signed int litTemperature(const bool correction = true);
   signed int getTemperature(const bool correction = true); // récupère la température calculé par la sonde, si besoin demande un nouveau calcul, si besoin attends le temps que le calcul soit effectué
 
   signed int correctionMesure(signed int mesure);
+
   bool calcCorrection(signed int mesure,signed int tempReelle);
   bool calcCorrection(signed int mesure1,signed int tempReelle1,signed int mesure2,signed int tempReelle2);
+
   bool isSondeTemp();
   bool isDS3231();
   bool isDS18B20();
-
 
   void print(HardwareSerial& serial);
   void print(DebugLogger& debug);
@@ -97,6 +97,7 @@ public:
 
   signed char num;
 protected:
+  signed int litTemperature(const bool correction = true);
   void chercheAdresse();
   signed char a;
   signed char b;

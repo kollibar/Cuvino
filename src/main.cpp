@@ -1169,7 +1169,7 @@ bool CuvinoGUI::menuConfiguration(void) {
     result = widgets.menuListeV2(CuvinoGUI::_creeLigneMenuConfiguration, NULL, NB_LIGNE_MAX + nbAvt + nbApres + ((horlogeOK) ? 1 : 0) + 5, 15, 8, LCDHEIGHT, 0, LCDWIDTH, 1, depart);
     depart = result.result;
 
-    if ( result.touche == 0 && result.result != NB_LIGNE_MAX + nbAvt + nbApres + ((horlogeOK) ? 1 : 0) + 3) { // touche selection
+    if ( result.touche == 0 && result.result != NB_LIGNE_MAX + nbAvt + nbApres + ((horlogeOK) ? 1 : 0) + 4) { // touche selection
       if ( result.result < nbAvt ) { // cas des fonctions avant le menu(fonctions ajoutées avant)
         for (unsigned char j = 0, i = 0; i < NB_MAX_FCT_MENU; ++i) {
           if ( addLignes[i].pos == POSITION_MENU_AVT) {
@@ -1487,7 +1487,7 @@ bool CuvinoGUI::menuConfigCuve(CuveV2& cuve) {
       if( n==0) return false;
       else cuve.nom=n;
     } else if( result.touche == 0 && result.result == 4 ){ // calibrage sonde
-      if( !cuve.sonde->isSondeTemp()){ // aucune sonde configurée
+      if( !cuve.hasSondeTemp() ){ // aucune sonde configurée
 
       } else{ // sonde configurée
         timer.stop(data.timerID);
@@ -1502,7 +1502,7 @@ bool CuvinoGUI::menuConfigCuve(CuveV2& cuve) {
       debugGUI.printPGM(DEBUG_sondeConfigure);
       #endif
     } else if ( result.touche == 0 && (result.result == 1 || result.result == 2)) { // modification de l'électrovanne
-       timer.stop(data.timerID);
+      timer.stop(data.timerID);
 
       // texte d'entête du menuConfigEV
       display.clearDisplay();
@@ -1524,7 +1524,7 @@ bool CuvinoGUI::menuConfigCuve(CuveV2& cuve) {
 
         xSemaphoreGive(semaphoreAccesDataCore); // rend l'acces au data du core
 
-        if( ! widgets.menuConfigEV(((result.result == 2) ? cuve.EV_C : cuve.EV_F))) return false; // configuration de l'EV
+        if( ! widgets.menuConfigEV(((result.result == 2) ? cuve.EV_C : cuve.EV_F)) ) return false; // configuration de l'EV
 
         if( xSemaphoreTake(semaphoreAccesDataCore, TEMPS_MAX_ACCES_DATA_CORE_TICK )){ // prend l'acces aux data du core
           cuve.tempConsigneCuve = sauveTemp;// remet la température de consigne de la cuve
@@ -2491,6 +2491,9 @@ void cuvinoCore(void* arg){
   debug.write(' ');
   debug.printlnPGM(DEBUG_start);
   #endif
+  for(unsigned char i=0;i<NB_LIGNE_MAX;++i){
+    if( listeCuve[i].estConfigure() ) listeCuve[i].demandeMesureTemp();
+  }
   for(;;){
     cmdeInterne cmde;
 
@@ -2666,9 +2669,9 @@ void setup() {
   queueCmdeToTimer = xQueueCreate(10,sizeof(char));
   queueCmdeToProgramme = xQueueCreate(10,sizeof(char));
   semaphoreAccesDataCore = xSemaphoreCreateBinary();
-  xTaskCreate(&cuvinoCore, (const char*)"CuvinoCore", 500, 0, 1, &taskCore);
-  xTaskCreate(&cuvinoGUI, (const char*)"CuvinoGUI", 800, 0, 1, &taskGUI);
-  xTaskCreate(&cuvinoTimer, (const char*)"CuvinoTimer", 500, 0, 1, &taskTimer);
+  xTaskCreate(&cuvinoCore, (const char*)"CuvinoCore", 800, 0, 1, &taskCore);
+  xTaskCreate(&cuvinoGUI, (const char*)"CuvinoGUI", 1200, 0, 1, &taskGUI);
+  xTaskCreate(&cuvinoTimer, (const char*)"CuvinoTimer", 600, 0, 1, &taskTimer);
   xTaskCreate(&cuvinoProgramme, (const char*)"CuvinoProgramme", 600, 0, 1, &taskProgramme);
 
   #ifdef CLAVIER_FREERTOS

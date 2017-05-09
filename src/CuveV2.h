@@ -45,7 +45,9 @@ class CuveV2 {
     uint16_t load(uint16_t addr);
     bool load(BlocMem* bloc);
     void defaut(void);
+
     bool estConfigure();
+    bool hasSondeTemp();
 
     bool controlTemp(signed int decalage=0);
     signed int getTemperature();

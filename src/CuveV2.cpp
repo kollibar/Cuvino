@@ -102,6 +102,10 @@ bool CuveV2::estConfigure() {
   return (tempConsigneCuve != TEMP_LIGNE_NON_CONFIGURE && tempConsigneCuve != TEMP_SONDE_NON_CONFIGURE && (EV_F.estConfigure() || EV_C.estConfigure()));
 }
 
+bool CuveV2::hasSondeTemp(){
+  return ( this->sonde != NULL && this->sonde->isSondeTemp() );
+}
+
 bool CuveV2::setConsigned(signed int c){
   this->tempConsigneCuve=c;
   return true;
