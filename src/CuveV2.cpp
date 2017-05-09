@@ -182,7 +182,13 @@ bool CuveV2::controlTemp(int decalage){
     vTaskDelay( (750 / (this->sonde->getPrecision() + 1)) / portTICK_PERIOD_MS);
     temp = this->sonde->getTemperature();*/
     temp=this->getTemperature();
-    // A FAIRE si plus de 2 erreur de lecture de température..
+    if( temp < (-20*16) || temp > (100*16) ){ // si temp n'est pas dans la plage -20° - 100°C => erreur de communication vraisemblable
+      temp=this->getTemperature(); // on réessaye une 2e fois
+
+      // A FAIRE si plus de 2 erreur de lecture de température..
+      if( temp < (-20*16) || temp > (100*16) ) return false;
+    }
+
     #ifdef DEBUG
     this->sonde->print(debugCuveV2);
     #endif
@@ -206,7 +212,7 @@ bool CuveV2::controlTemp(int decalage){
   tempObj = this->tempConsigneCuve + decalage;
 
   if (this->tempConsigneCuve <= 2000 && this->tempConsigneCuve >= -880) { // si la température de consigne est comprise dans la plage du capteur
-    if (this->sonde->addr[0] == DS18B20) {
+    if (this->sonde->isDS18B20() ) {
       //contrôle de la ligne en interronpant le froid
 #ifdef DEBUG
       debugCuveV2.printPGM(CUVE_DEBUG_LIGNE);
@@ -316,10 +322,10 @@ bool CuveV2::controlTemp(int decalage){
 
 void CuveV2::print(HardwareSerial& serial){
   signed int temp;
-  serial.print("Cuve(");
+  serial.print(F("Cuve("));
 
   serial.print(nom);
-  serial.print(",");
+  serial.print(',');
 
   if( tempConsigneCuve<0) {
     serial.print('-');
@@ -332,28 +338,28 @@ void CuveV2::print(HardwareSerial& serial){
   temp=temp&0b1111;
   if( temp!=0){
     serial.print('.');
-    if( temp==1) serial.print("0625");
+    if( temp==1) serial.print(F("0625"));
     else serial.print((temp)*625);
   }
-  serial.print("°,");
+  serial.print(F("°,"));
 
-  serial.print("Sonde ");
+  serial.print(F("Sonde "));
   serial.print(this->sonde->num);
   serial.print(' ');
   serial.print('@');
   serial.println((unsigned int)this->sonde);
 
   sonde->print(serial);
-  serial.print(", EV froid:");
+  serial.print(F(", EV froid:"));
   EV_F.print(serial);
-  serial.print(", EV chaud:");
+  serial.print(F(", EV chaud:"));
   EV_C.print(serial);
-  serial.print(")");
+  serial.print(')');
 }
 
 void CuveV2::print(DebugLogger& debug){
   signed int temp;
-  debug.print("Cuve(");
+  debug.print(F("Cuve("));
 
   debug.print(nom);
   debug.print(',');
@@ -369,10 +375,10 @@ void CuveV2::print(DebugLogger& debug){
   temp=temp&0b1111;
   if( temp!=0){
     debug.print('.');
-    if( temp==1) debug.print("0625");
+    if( temp==1) debug.print(F("0625"));
     else debug.print((temp)*625);
   }
-  debug.print("°,");
+  debug.print(F("°,"));
 
   debug.printPGM(FR::TXT_SONDE);
   debug.print(' ');
@@ -382,9 +388,9 @@ void CuveV2::print(DebugLogger& debug){
   debug.println((unsigned int)this->sonde);
 
   sonde->print(debug);
-  debug.print(", EV froid:");
+  debug.print(F(", EV froid:"));
   EV_F.print(debug);
-  debug.print(", EV chaud:");
+  debug.print(F(", EV chaud:"));
   EV_C.print(debug);
   debug.println(')');
 }
