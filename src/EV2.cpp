@@ -108,6 +108,40 @@ const char* TXT_EV(unsigned char num){
   }
 }
 
+bool EV_OK(unsigned char num){
+  switch (num) {
+    case EV_NON_CONFIGURE:
+      return false;
+  #ifdef CR01
+    case CR01:
+  #endif
+  #ifdef CR01modif
+    case CR01modif:
+  #endif
+  #ifdef CR05
+    case CR05:
+  #endif
+  #ifdef CR05_A
+    case CR05_A:
+  #endif
+  #ifdef CR01_MO
+    case CR01_MO:
+  #endif
+  #ifdef CR01_MF
+  case CR01_MF:
+  #endif
+  #ifdef CR01_MAINTIENT
+    case CR01_MAINTIENT:
+  #endif
+  #ifdef EV_RELAI
+    case EV_RELAI:
+  #endif
+      return true;
+    default:
+      return false;
+  }
+}
+
 
 uint8_t ElectroVanne2::numModuleErr=0;
 PileErreur* ElectroVanne2::pileErreur=NULL;
@@ -115,6 +149,10 @@ Timer* ElectroVanne2::timer=NULL;
 OneWire* ElectroVanne2::ds=NULL;
 QueueHandle_t ElectroVanne2::qCmdeToCore=NULL;
 QueueHandle_t ElectroVanne2::qCmdeToTimer=NULL;
+
+bool ElectroVanne2::OK() const{
+   return EV_OK(this->mode);
+}
 
 void ElectroVanne2::begin(PileErreur& _pileErreur,Timer& _timer,OneWire& _ds,QueueHandle_t queueCmdeToCore,QueueHandle_t queueCmdeToTimer){
   pileErreur=&_pileErreur;

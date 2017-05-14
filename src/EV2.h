@@ -65,6 +65,7 @@
   #define EV_RELAI_OUVRANT  0b01000000
   #define EV_RELAI_FERMANT  0b10000000
 
+  #define EV_ERREUR       254
   #define EV_SONDE_LOCAL  255
   #define EV_MODE_UNIQUE  CR05
 #endif
@@ -99,9 +100,10 @@
 #endif
 
 
-unsigned char EVinListe(unsigned char num);
-const char* TXT_EV(unsigned char num);
-unsigned char sizeListeEV();
+unsigned char EVinListe(unsigned char num); // renvoi le mode de l'electrovanne à la postion num de la liste (fictive)
+const char* TXT_EV(unsigned char num);  /// renvoi le teste affecté à un mode d'EV
+unsigned char sizeListeEV();  // renvoi la taille de la liste d'EV
+bool EV_OK(unsigned char num);  // return true si le code de l'EV est bien existant, false sinon
 
 
 class ElectroVanne2 {
@@ -128,6 +130,8 @@ class ElectroVanne2 {
     bool load(BlocMem* bloc);
     void defaut(void);
     bool estConfigure() const;
+
+    bool OK() const;
 
     bool loadPort();
 

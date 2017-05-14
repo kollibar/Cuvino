@@ -2618,7 +2618,7 @@ void setup() {
   #ifdef DEBUG
   //Serial.begin(115200);
   //Serial.begin(250000);
-  Serial.begin(921600);
+  Serial.begin(115200);
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }

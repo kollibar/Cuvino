@@ -12,8 +12,8 @@
 #define LANGUE_FR
 #define TEMP_MINI_CONSIGNE  -48   // température minimale de consigne des cuves (en 1/16e de °C)
 #define TEMP_MAXI_CONSIGNE   480  // température maximale de consigne des cuves (en 1/16e de °C)
-#define HISTERESIS_SIMPLE   2 // histeresis 1/2 écart de température admissible pour l'histeresis (en 1/16e de °C)
-#define _1_2_ECART_CHAUD_FROID 4 // ecart entre les temperatures de déclenchement de la vanne chaud et la vanne froid (en 1/16e de °C)
+#define HISTERESIS_SIMPLE   4 // histeresis 1/2 écart de température admissible pour l'histeresis (en 1/16e de °C)
+#define _1_2_ECART_CHAUD_FROID 2 // ecart entre les temperatures de déclenchement de la vanne chaud et la vanne froid (en 1/16e de °C)
 #define HISTERESIS_COMPLEXE 16 //
 #define NOM_FICHIER_SD  "data.log"
 

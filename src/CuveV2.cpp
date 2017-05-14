@@ -270,34 +270,80 @@ bool CuveV2::controlTemp(int decalage){
       debugCuveV2.println(')');
 #endif
 
-      if ( this->EV_F.mode != EV_NON_CONFIGURE) { // EV froid
-        this->EV_F.etatEV();// actualise la position
-        if ( this->EV_C.mode != EV_NON_CONFIGURE) tempObj += _1_2_ECART_CHAUD_FROID; // si présence EV froid -> on compare par rapport à une température obj legèrement plus haut (d'1/2 ecart chaud froid)
+      // actualisation des positions
+      if ( this->EV_F.mode != EV_NON_CONFIGURE && EV_OK(this->EV_F.mode) ) this->EV_F.etatEV();
+      if ( this->EV_F.mode != EV_NON_CONFIGURE && EV_OK(this->EV_C.mode) ) this->EV_C.etatEV();
 
-        if ( this->EV_F.position == OUVERT && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
-          this->EV_F.bougeEV(FERME);
-          #ifdef DEBUG
-            debugCuveV2.printPGM(FR::TXT_FERMETURE);
+      if( this->EV_F.OK() ){
+        if( this->EV_C.OK()) { // EV Chaud et EV Froid OK
+
+          if( this->EV_F.position == OUVERT){ // si EV froid OUVERT
+            if( temp > (tempObj - HISTERESIS_SIMPLE + _1_2_ECART_CHAUD_FROID )){
+              this->EV_F.bougeEV(FERME);
+              #ifdef DEBUG
+                debugCuveV2.printPGM(FR::TXT_FERMETURE);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_EV);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_FROID);
+              #endif
+            }
+          } else if( this->EV_C.position == OUVERT ){ // si EV Chaud OUVERT
+            if( temp < (tempObj + HISTERESIS_SIMPLE - _1_2_ECART_CHAUD_FROID )){
+              this->EV_C.bougeEV(FERME);
+              #ifdef DEBUG
+                debugCuveV2.printPGM(FR::TXT_FERMETURE);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_EV);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_CHAUD);
+              #endif
+            }
+          } else { // EV Froid  et EV chaud FERME
+            if( temp > (tempObj + HISTERESIS_SIMPLE + _1_2_ECART_CHAUD_FROID )){
+              this->EV_F.bougeEV(OUVERT);
+              #ifdef DEBUG
+                debugCuveV2.printPGM(FR::TXT_OUVERTURE);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_EV);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_FROID);
+              #endif
+            } else if( temp < (tempObj - HISTERESIS_SIMPLE - _1_2_ECART_CHAUD_FROID )){
+              this->EV_C.bougeEV(OUVERT);
+              #ifdef DEBUG
+                debugCuveV2.printPGM(FR::TXT_OUVERTURE);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_EV);
+                debugCuveV2.write(' ');
+                debugCuveV2.printPGM(FR::TXT_CHAUD);
+              #endif
+            }
+          }
+
+        } else { // EV Froid OK mais pas d'EV chaud
+          if ( this->EV_F.position == OUVERT && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
+            this->EV_F.bougeEV(FERME);
+            #ifdef DEBUG
+              debugCuveV2.printPGM(FR::TXT_FERMETURE);
+              debugCuveV2.write(' ');
+              debugCuveV2.printPGM(FR::TXT_EV);
+              debugCuveV2.write(' ');
+              debugCuveV2.printPGM(FR::TXT_FROID);
+            #endif
+          } else if ( this->EV_F.position == FERME && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
+            this->EV_F.bougeEV(OUVERT);
+            #ifdef DEBUG
+            debugCuveV2.printPGM(FR::TXT_OUVERTURE);
             debugCuveV2.write(' ');
             debugCuveV2.printPGM(FR::TXT_EV);
             debugCuveV2.write(' ');
             debugCuveV2.printPGM(FR::TXT_FROID);
-          #endif
-        } else if ( this->EV_F.position == FERME && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
-          this->EV_F.bougeEV(OUVERT);
-          #ifdef DEBUG
-          debugCuveV2.printPGM(FR::TXT_OUVERTURE);
-          debugCuveV2.write(' ');
-          debugCuveV2.printPGM(FR::TXT_EV);
-          debugCuveV2.write(' ');
-          debugCuveV2.printPGM(FR::TXT_FROID);
-          #endif
+            #endif
+          }
         }
-      }
-
-      if ( this->EV_C.mode != EV_NON_CONFIGURE) { // EV chaud
-        this->EV_C.etatEV();// actualise la position
-        if ( this->EV_F.mode != EV_NON_CONFIGURE) tempObj -= (_1_2_ECART_CHAUD_FROID << 1); // si présence EV chaud -> on compare par rapport à une température obj legèrement plus bas (d'1/2 ecart chaud froid)
+      } else { // pas d'EV Froid
+        if( this->EV_C.OK()) { // EV Chaud OK mais pas d'EV Froid
 
         if ( this->EV_C.position == OUVERT && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
           this->EV_C.bougeEV(FERME);
@@ -318,7 +364,14 @@ bool CuveV2::controlTemp(int decalage){
           debugCuveV2.printPGM(FR::TXT_CHAUD);
           #endif
         }
+
+        } else { // ni EV Froid, ni EV Chaud
+          #ifdef DEBUG
+            debugCuveV2.print(F("aucune EV fonctionnelles"));
+          #endif
+        }
       }
+
     }
   }
   return true;
