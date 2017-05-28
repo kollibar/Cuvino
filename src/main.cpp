@@ -1072,8 +1072,12 @@ void CuvinoGUI::actualiseAffTemp(signed int i, signed int pos){
   } else if ( listeCuve[i].tempConsigneCuve != TEMP_LIGNE_NON_CONFIGURE && listeCuve[i].tempConsigneCuve != TEMP_SONDE_NON_CONFIGURE && listeCuve[i].sonde->isSondeTemp() ) {
     signed int temp=listeCuve[i].getTemperature();
     if( temp <= TEMP_ERREUR) {
-      display.setCursor(p.x,p.y);
-      display.print(FR::TXT_ERR);
+      if( temp == TEMP_ERREUR_COMMUNICATION_SONDE){ //erreur de communication sonde
+        display.print(FR::TXT_ERR_COM);
+      } else { //erreur générique
+        display.setCursor(p.x,p.y);
+        display.print(FR::TXT_ERR);
+      }
     } else {
         widgets.printTemp(temp, p.x, p.y);
     }

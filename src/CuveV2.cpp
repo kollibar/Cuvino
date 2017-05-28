@@ -186,6 +186,10 @@ bool CuveV2::controlTemp(int decalage){
     vTaskDelay( (750 / (this->sonde->getPrecision() + 1)) / portTICK_PERIOD_MS);
     temp = this->sonde->getTemperature();*/
     temp=this->getTemperature();
+    if( temp == TEMP_ERREUR_COMMUNICATION_SONDE ){ // erreur de communication avec la sonde
+      // A FAIRE
+      return false;
+    }
     if( temp < (-20*16) || temp > (100*16) ){ // si temp n'est pas dans la plage -20° - 100°C => erreur de communication vraisemblable
       temp=this->getTemperature(); // on réessaye une 2e fois
 

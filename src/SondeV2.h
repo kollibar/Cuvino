@@ -34,6 +34,7 @@
 //#define DEBUG
 
 #define DS18B20 0x28     // Adresse 1-Wire du DS18B20
+#define NB_MAX_RELECTURE_SONDE  2 // nombre max de relecture si erreur
 
 #define TEMP_LIGNE_NON_CONFIGURE -32761 // affecté à la consigne d'une ligne non configurée
 #define TEMP_EV_NON_CONFIGURE -32763 // affecté à la consigne d'une ligne avec EV non configurée
@@ -45,6 +46,7 @@
 #define TEMP_ERREUR_ABS_SONDE -32751  // erreur de temperature: pas de sonde
 #define TEMP_ERREUR_EV_TEMPS_TROP_LONG  -32752 // erreur electrovanne : temps d'ouverture ou de fermeture bcp trop long
 #define TEMP_ERREUR_PAS_SONDE -32753  // erreur ce n'est pas une sonde
+#define TEMP_ERREUR_COMMUNICATION_SONDE   -32754
 #define TEMP_NON_LUE  -32700  // température non encore lue!
 
 #define PRECISION_HAUTE     0
@@ -97,7 +99,7 @@ public:
 
   signed char num;
 protected:
-  signed int litTemperature(const bool correction = true);
+  signed int litTemperature(const bool correction = true,unsigned char n=0);
   void chercheAdresse();
   signed char a;
   signed char b;

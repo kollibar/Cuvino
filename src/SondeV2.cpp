@@ -276,7 +276,7 @@ unsigned long SondeV2::timeToWait(){
   return (750 / (this->precision+1)) - delai;
 }
 
-signed int SondeV2::litTemperature(const bool correction) {
+signed int SondeV2::litTemperature(const bool correction,unsigned char n) {
   /* lit la temperature de la dernière mesure effctué avec la sonde à l'addr donnée*/
 
   if (addr[0] != DS18B20) { // Vérifie qu'il s'agit bien d'un DS18B20
@@ -295,10 +295,21 @@ signed int SondeV2::litTemperature(const bool correction) {
   for (unsigned char i = 0; i < 9; ++i) // On lit le scratchpad
     data[i] = ds->read();       // Et on stock les octets reçus
 
-  // Calcul de la température en 1/16e de degré Celsius
+  // vérification de la validité des octets reçus.
+  if( ds->crc8(&data[0],8) == data[8] ){ // lecture valide
+    // Calcul de la température en 1/16e de degré Celsius
 
-  if( correction ) return (correctionMesure( ((data[1] << 8) | data[0])<< this->precision ));
-  else return ( ((data[1] << 8) | data[0]) << this->precision );
+    if( correction ) return (correctionMesure( ((data[1] << 8) | data[0])<< this->precision ));
+    else return ( ((data[1] << 8) | data[0]) << this->precision );
+  } else { // lecture invalide
+
+    if( n < NB_MAX_RELECTURE_SONDE ){ // si pas atteint le nb maximal de relecture
+        return this->litTemperature(correction,n+1);
+
+    } else { // si nb max de relecture atteint
+        return TEMP_ERREUR_COMMUNICATION_SONDE;
+    }
+  }
 }
 
 signed int SondeV2::getTemperature(const bool correction) {

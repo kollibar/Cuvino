@@ -77,6 +77,7 @@ namespace FR{
   const char PROGMEM TXT_INTERNE[]="interne";
 
   const char PROGMEM TXT_ERR[]="err";
+  const char PROGMEM TXT_ERR_COM[]="ErrC";
   const char PROGMEM TXT_REINIT_MEM[]="reinit. mem.";
   const char PROGMEM TXT_REINITIALISER[]="reinitialiser";
   const char PROGMEM TXT_LA_MEMOIRE[]="la memoire";
