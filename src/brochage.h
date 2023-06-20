@@ -12,8 +12,6 @@
 #include <FreeRTOSVariant.h>
 #include <queue.h>
 #include <FreeRTOSConfig.h>
-#include <croutine.h>
-#include <StackMacros.h>
 #include <mpu_wrappers.h>
 #include <task.h>
 #include <portable.h>
@@ -25,15 +23,17 @@
 
 namespace Brochage{
   SondeV2* sondeV2(signed char num);
+  /*
   unsigned char brocheEVouv(unsigned char num);
   unsigned char brocheEtatEVouv(unsigned char num);
-  unsigned char brocheSonde(unsigned char num);
+  unsigned char brocheSonde(unsigned char num);*/
   OneWire* oneWireSonde(unsigned char num);
 
 
-  const unsigned nbEV = 4;
-  const unsigned nbSonde=4;
-
+  const unsigned nbEV = 9;
+  const unsigned nbSonde=5;
+  
+/*
   // brochage des Electrovannes //
   const unsigned char brocheEV_0_O = 22;
   const unsigned char brocheEV_0_F = 23;
@@ -52,13 +52,15 @@ namespace Brochage{
   const unsigned char brocheEtatEV_2_O = 34;
   const unsigned char brocheEtatEV_2_F = 35;
   const unsigned char brocheEtatEV_3_O = 36;
-  const unsigned char brocheEtatEV_3_F = 37;
+  const unsigned char brocheEtatEV_3_F = 37;*/
 
   // brochage des sondes de températures //
-  const unsigned char brocheSonde_0 = 42;
-  const unsigned char brocheSonde_1 = 43;
-  const unsigned char brocheSonde_2 = 44;
-  const unsigned char brocheSonde_3 = 45;
+  const unsigned char brocheSonde_0 = A2; //PF2
+  const unsigned char brocheSonde_1 = A3; //PF3
+  const unsigned char brocheSonde_2 = A0; //PF0
+  const unsigned char brocheSonde_3 = A1; //PF1
+  const unsigned char brocheSonde_4 = A9; //PK1
+  // const unsigned char brocheSonde_5 = A8; //PK0
 
   // objets 1-Wire correspondant au brochage des sondes de températures
 

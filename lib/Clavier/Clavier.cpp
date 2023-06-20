@@ -33,6 +33,7 @@ uint8_t Clavier::getTouche(int16_t attenteTouche) {
   uint32_t date_entre = millis();
   uint32_t attenteToucheMillis = 0;
   uint8_t datePression;
+  
   if (attenteTouche > 0) attenteToucheMillis = (uint32_t)attenteTouche * 1000;
   if (attenteTouche == 0) attenteToucheMillis = 1;
 

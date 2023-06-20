@@ -5,15 +5,15 @@
 
 #define VERSION_LOGICIEL 1
 #define NB_LIGNE_MAX 3
-#define NB_EV_MAX 4
+#define NB_EV_MAX 7
 #define NB_SONDE_MAX  5
 #define NB_PROGRAMME_MAX 20
-#define VERSION_MEMOIRE 1
+#define VERSION_MEMOIRE 2
 #define LANGUE_FR
 #define TEMP_MINI_CONSIGNE  -48   // température minimale de consigne des cuves (en 1/16e de °C)
-#define TEMP_MAXI_CONSIGNE   480  // température maximale de consigne des cuves (en 1/16e de °C)
-#define HISTERESIS_SIMPLE   4 // histeresis 1/2 écart de température admissible pour l'histeresis (en 1/16e de °C)
-#define _1_2_ECART_CHAUD_FROID 2 // ecart entre les temperatures de déclenchement de la vanne chaud et la vanne froid (en 1/16e de °C)
+#define TEMP_MAXI_CONSIGNE   640  // température maximale de consigne des cuves (en 1/16e de °C)
+#define HISTERESIS_SIMPLE   8 // histeresis 1/2 écart de température admissible pour l'histeresis (en 1/16e de °C)
+#define _1_2_ECART_CHAUD_FROID 4 // ecart entre les temperatures de déclenchement de la vanne chaud et la vanne froid (en 1/16e de °C)
 #define HISTERESIS_COMPLEXE 16 //
 #define NOM_FICHIER_SD  "data.log"
 

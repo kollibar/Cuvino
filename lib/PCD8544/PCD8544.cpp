@@ -37,9 +37,9 @@
 #include <Adafruit_GFX_v1.0.2_NB8bits.h>
 #include "PCD8544.h"
 
-uint8_t pcd8544_buffer[LCDWIDTH * LCDHEIGHT / 8];
+//uint8_t pcd8544_buffer[LCDWIDTH * LCDHEIGHT / 8];
 // the memory buffer for the LCD
-/*uint8_t pcd8544_buffer[LCDWIDTH * LCDHEIGHT / 8] = {
+uint8_t pcd8544_buffer[LCDWIDTH * LCDHEIGHT / 8] = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xFC, 0xFE, 0xFF, 0xFC, 0xE0,
@@ -72,7 +72,7 @@ uint8_t pcd8544_buffer[LCDWIDTH * LCDHEIGHT / 8];
   0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x7F, 0x1F, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  };*/
+  };
 
 
 // reduces how much is refreshed, which speeds it up!
@@ -102,6 +102,8 @@ Adafruit_PCD8544::Adafruit_PCD8544(int8_t SCLK, int8_t DIN, int8_t DC,
   _dc = DC;
   _rst = RST;
   _cs = CS;
+  this->fctRST=NULL;
+  this->fctPIN=NULL;
 }
 
 Adafruit_PCD8544::Adafruit_PCD8544(int8_t SCLK, int8_t DIN, int8_t DC,
@@ -111,6 +113,8 @@ Adafruit_PCD8544::Adafruit_PCD8544(int8_t SCLK, int8_t DIN, int8_t DC,
   _dc = DC;
   _rst = RST;
   _cs = -1;
+  this->fctRST=NULL;
+  this->fctPIN=NULL;
 }
 
 Adafruit_PCD8544::Adafruit_PCD8544(int8_t DC, int8_t CS, int8_t RST):
@@ -121,7 +125,34 @@ Adafruit_PCD8544::Adafruit_PCD8544(int8_t DC, int8_t CS, int8_t RST):
   _dc = DC;
   _rst = RST;
   _cs = CS;
+  this->fctRST=NULL;
+  this->fctPIN=NULL;
 }
+
+
+Adafruit_PCD8544::Adafruit_PCD8544(int8_t SCLK, int8_t DIN,pcd8544PinFct fctPIN, pcd8544RstFct fctRST) : Adafruit_GFX_NB8bits(LCDWIDTH, LCDHEIGHT) {
+  _din = DIN;
+  _sclk = SCLK;
+  _dc = -1;
+  _rst = -1;
+  _cs = -1;
+  this->fctPIN=fctPIN;
+  this->fctRST=fctRST;
+
+}
+
+Adafruit_PCD8544::Adafruit_PCD8544(pcd8544PinFct fctPIN, pcd8544RstFct fctRST): Adafruit_GFX_NB8bits(LCDWIDTH, LCDHEIGHT) {
+  // -1 for din and sclk specify using hardware SPI
+  _din = -1;
+  _sclk = -1;
+  _dc = -1;
+  _rst = -1;
+  _cs = -1;
+  this->fctPIN=fctPIN;
+  this->fctRST=fctRST;
+}
+
+
 
 
 // the most basic function, set a single pixel
@@ -274,14 +305,17 @@ void Adafruit_PCD8544::begin(uint8_t contrast, uint8_t bias) {
   }
 
   // Set common pin outputs.
-  pinMode(_dc, OUTPUT);
+  if( _dc > 0 )
+    pinMode(_dc, OUTPUT);
   if (_rst > 0)
     pinMode(_rst, OUTPUT);
   if (_cs > 0)
     pinMode(_cs, OUTPUT);
 
   // toggle RST low to reset
-  if (_rst > 0) {
+  if( this->fctRST != NULL)
+    this->fctRST();
+  else if (_rst > 0) {
     digitalWrite(_rst, LOW);
     delay(500);
     digitalWrite(_rst, HIGH);
@@ -340,21 +374,33 @@ bool Adafruit_PCD8544::isHardwareSPI() const{
 }
 
 void Adafruit_PCD8544::command(uint8_t c) {
-  digitalWrite(_dc, LOW);
-  if (_cs > 0)
-    digitalWrite(_cs, LOW);
-  spiWrite(c);
-  if (_cs > 0)
-    digitalWrite(_cs, HIGH);
+  if( this->fctPIN !=NULL){
+    this->fctPIN(0,0);
+    spiWrite(c);
+    this->fctPIN(1,0);
+  } else  {
+    digitalWrite(_dc, LOW);
+    if (_cs > 0)
+      digitalWrite(_cs, LOW);
+    spiWrite(c);
+    if (_cs > 0)
+      digitalWrite(_cs, HIGH);
+  }
 }
 
 void Adafruit_PCD8544::data(uint8_t c) {
-  digitalWrite(_dc, HIGH);
-  if (_cs > 0)
-    digitalWrite(_cs, LOW);
-  spiWrite(c);
-  if (_cs > 0)
-    digitalWrite(_cs, HIGH);
+  if( this->fctPIN !=NULL){
+    this->fctPIN(0,1);
+    spiWrite(c);
+    this->fctPIN(1,1);
+  } else  {
+    digitalWrite(_dc, HIGH);
+    if (_cs > 0)
+      digitalWrite(_cs, LOW);
+    spiWrite(c);
+    if (_cs > 0)
+      digitalWrite(_cs, HIGH);
+  }
 }
 
 void Adafruit_PCD8544::setContrast(uint8_t val) {
@@ -396,14 +442,23 @@ void Adafruit_PCD8544::display(void) {
 
     command(PCD8544_SETXADDR | col);
 
-    digitalWrite(_dc, HIGH);
-    if (_cs > 0)
-      digitalWrite(_cs, LOW);
+    if( this->fctPIN != NULL ){
+      this->fctPIN(0,1);
+    } else {
+      digitalWrite(_dc, HIGH);
+      if (_cs > 0)
+        digitalWrite(_cs, LOW);
+    }
     for (; col <= maxcol; col++) {
       spiWrite(pcd8544_buffer[(LCDWIDTH * p) + col]);
     }
-    if (_cs > 0)
-      digitalWrite(_cs, HIGH);
+
+    if( this->fctPIN != NULL ){
+      this->fctPIN(1,1);
+    } else {
+      if (_cs > 0)
+        digitalWrite(_cs, HIGH);
+    }
 
   }
 
@@ -447,8 +502,7 @@ void Adafruit_PCD8544::clearDisplay(void) {
 */
 
 
-PCD8544_SPI_Software::PCD8544_SPI_Software(int8_t SCLK, int8_t DIN, int8_t DC, int8_t CS,
-  int8_t RST) : Adafruit_PCD8544(SCLK, DIN, DC, CS, RST){
+PCD8544_SPI_Software::PCD8544_SPI_Software(int8_t SCLK, int8_t DIN, int8_t DC, int8_t CS,int8_t RST) : Adafruit_PCD8544(SCLK, DIN, DC, CS, RST){
 
 }
 PCD8544_SPI_Software::PCD8544_SPI_Software(int8_t SCLK, int8_t DIN, int8_t DC,
@@ -468,14 +522,17 @@ void PCD8544_SPI_Software::begin(uint8_t contrast, uint8_t bias) {
   mosipinmask = digitalPinToBitMask(_din);
 
   // Set common pin outputs.
-  pinMode(_dc, OUTPUT);
+  if (_dc > 0)
+    pinMode(_dc, OUTPUT);
   if (_rst > 0)
     pinMode(_rst, OUTPUT);
   if (_cs > 0)
     pinMode(_cs, OUTPUT);
 
   // toggle RST low to reset
-  if (_rst > 0) {
+  if( this->fctRST != NULL )
+    this->fctRST();
+  else if (_rst > 0) {
     digitalWrite(_rst, LOW);
     delay(500);
     digitalWrite(_rst, HIGH);
@@ -513,21 +570,33 @@ void PCD8544_SPI_Software::begin(uint8_t contrast, uint8_t bias) {
 }
 
 void PCD8544_SPI_Software::command(uint8_t c) {
-  digitalWrite(_dc, LOW);
-  if (_cs > 0)
-    digitalWrite(_cs, LOW);
-  spiWrite(c);
-  if (_cs > 0)
-    digitalWrite(_cs, HIGH);
+  if( this->fctPIN !=NULL){
+    this->fctPIN(0,0);
+    spiWrite(c);
+    this->fctPIN(1,0);
+  } else  {
+    digitalWrite(_dc, LOW);
+    if (_cs > 0)
+      digitalWrite(_cs, LOW);
+    spiWrite(c);
+    if (_cs > 0)
+      digitalWrite(_cs, HIGH);
+  }
 }
 
 void PCD8544_SPI_Software::data(uint8_t c) {
-  digitalWrite(_dc, HIGH);
-  if (_cs > 0)
-    digitalWrite(_cs, LOW);
-  spiWrite(c);
-  if (_cs > 0)
-    digitalWrite(_cs, HIGH);
+  if( this->fctPIN !=NULL){
+    this->fctPIN(0,1);
+    spiWrite(c);
+    this->fctPIN(1,1);
+  } else  {
+    digitalWrite(_dc, HIGH);
+    if (_cs > 0)
+      digitalWrite(_cs, LOW);
+    spiWrite(c);
+    if (_cs > 0)
+      digitalWrite(_cs, HIGH);
+  }
 }
 
 inline void PCD8544_SPI_Software::spiWrite(uint8_t d){

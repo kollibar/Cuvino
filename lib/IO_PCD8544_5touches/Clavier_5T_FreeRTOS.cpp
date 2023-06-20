@@ -43,7 +43,7 @@ BaseType_t Clavier_5T_FreeRTOS::startTask(TaskHandle_t _taskGUI,unsigned short u
   BaseType_t retour;
   if( taskKeyboard ==NULL){
     retour = xTaskCreate( Clavier_5T_FreeRTOS::fctKeyboard,
-                            (const portCHAR *)"kb_5T",
+                            (const char *)"kb_5T",
                             usStackDepth,
                             (void *)this,
                             uxPriority,

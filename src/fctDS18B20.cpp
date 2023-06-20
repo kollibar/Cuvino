@@ -27,13 +27,13 @@ signed char getNbDS18B20(OneWire& ds){
   ds.reset_search();    // Réinitialise la recherche de module
   while (ds.search(addr)) {
 #ifdef DEBUG
-    debugSonde.print("addresse 1Wire ");
+    debugSonde.print(F("addresse 1Wire "));
     for (uint8_t c = 0; c < 8; ++c) debugSonde.print(addr[c], HEX);
-    debugSonde.println("");
+    debugSonde.println();
 #endif
     if (OneWire::crc8(addr, 7) != addr[7]) {// Vérifie que l'adresse a été correctement reçue
 #ifdef DEBUG
-      debugSonde.print("Erreur lors de la transmission");
+      debugSonde.print(F("Erreur lors de la transmission"));
 #endif
       return -1;
     }
@@ -49,13 +49,13 @@ bool getDS18B20(OneWire& ds,unsigned char* addr,unsigned char n){
   ds.reset_search();    // Réinitialise la recherche de module
   while (ds.search(addr)) {
 #ifdef DEBUG
-    debugSonde.print("addresse 1Wire ");
+    debugSonde.print(F("addresse 1Wire "));
     for (uint8_t c = 0; c < 8; ++c) debugSonde.print(addr[c], HEX);
-    debugSonde.println("");
+    debugSonde.println();
 #endif
     if (OneWire::crc8(addr, 7) != addr[7]) {// Vérifie que l'adresse a été correctement reçue
 #ifdef DEBUG
-      debugSonde.print("Erreur lors de la transmission");
+      debugSonde.print(F("Erreur lors de la transmission"));
 #endif
       addr[0]=0;
       return false;
@@ -77,13 +77,13 @@ bool initRechercheDS18B20(OneWire& ds){
 bool getDS18B20suivant(OneWire& ds,unsigned char* addr){
   while (ds.search(addr)) {
 #ifdef DEBUG
-    debugSonde.print("addresse 1Wire ");
+    debugSonde.print(F("addresse 1Wire "));
     for (uint8_t c = 0; c < 8; ++c) debugSonde.print(addr[c], HEX);
-    debugSonde.println("");
+    debugSonde.println();
 #endif
     if (OneWire::crc8(addr, 7) != addr[7]) {// Vérifie que l'adresse a été correctement reçue
 #ifdef DEBUG
-      debugSonde.print("Erreur lors de la transmission");
+      debugSonde.print(F("Erreur lors de la transmission"));
 #endif
       addr[0]=0;
       return false;

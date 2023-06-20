@@ -30,7 +30,7 @@ extern "C" {
 
 // Initialize Class Variables //////////////////////////////////////////////////
 
-uint
+
 uint8_t TwoWire::rxBuffer[BUFFER_LENGTH];
 uint8_t TwoWire::rxBufferIndex = 0;
 uint8_t TwoWire::rxBufferLength = 0;

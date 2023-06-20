@@ -48,6 +48,7 @@ class Programme {
     unsigned char cuve;
     unsigned char alarme;
     signed int temp;
+    uint8_t _mode;
 
     Programme();
 
@@ -63,8 +64,8 @@ class Programme {
 
     bool setCuve(unsigned char cuve,signed int temp);
 
-    uint16_t save(uint16_t addr) const;
-    uint16_t load(uint16_t addr);
+    uint16_t save(uint16_t addr, uint8_t version=1) const;
+    uint16_t load(uint16_t addr, uint8_t version=1);
     // bool save(BlocMembloc);
     // bool load(BlocMem* bloc);
     void defaut(void);

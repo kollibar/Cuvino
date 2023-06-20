@@ -25,7 +25,6 @@ All text above, and the splash screen must be included in any redistribution
   #include "pins_arduino.h"
 #endif
 
-#include <broches.h>
 #include <SPI.h>
 #include <Adafruit_GFX_v1.0.2_NB8bits.h>
 
@@ -79,6 +78,10 @@ All text above, and the splash screen must be included in any redistribution
 // This can be modified to change the clock speed if necessary (like for supporting other hardware).
 #define PCD8544_SPI_CLOCK_DIV SPI_CLOCK_DIV4
 
+typedef void (*pcd8544PinFct)(uint8_t, uint8_t);
+typedef void (*pcd8544RstFct)();
+
+
 class Adafruit_PCD8544 : public Adafruit_GFX_NB8bits {
  public:
   // Software SPI with explicit CS pin.
@@ -88,6 +91,9 @@ class Adafruit_PCD8544 : public Adafruit_GFX_NB8bits {
   // Hardware SPI based on hardware controlled SCK (SCLK) and MOSI (DIN) pins. CS is still controlled by any IO pin.
   // NOTE: MISO and SS will be set as an input and output respectively, so be careful sharing those pins!
   Adafruit_PCD8544(int8_t DC, int8_t CS, int8_t RST);
+
+  Adafruit_PCD8544(int8_t SCLK, int8_t DIN,pcd8544PinFct fct, pcd8544RstFct fctRST);
+  Adafruit_PCD8544(pcd8544PinFct fctPin, pcd8544RstFct fctRst);
 
   // peut être réécrite pour ajouter des fonctions au démarrage, mais dans ce cas, DOIT être appellé quand même  (via Adafruit_PCD8544::begin)
   virtual void begin(uint8_t contrast = 40, uint8_t bias = 0x04);
@@ -106,6 +112,8 @@ class Adafruit_PCD8544 : public Adafruit_GFX_NB8bits {
 
 protected:
   int8_t _din, _sclk, _dc, _rst, _cs;
+  pcd8544PinFct fctPIN;
+  pcd8544RstFct fctRST;
   volatile PortReg  *mosiport, *clkport;
   PortMask mosipinmask, clkpinmask;
 

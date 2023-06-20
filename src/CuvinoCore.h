@@ -41,13 +41,19 @@ namespace CuvinoCore{
   /* Gestion des paramètres */
   void reglageDefaut(void);
   void saveParams(void);
+  size_t saveParamsV2(size_t adresse=0);
+  size_t saveParamsV2_cuves(size_t adresse);
+  size_t saveParamsV2_principal(size_t adresse, size_t adresseBlocCuves=0xFFFF, size_t adresseBlocProgrammes=0xFFFF);
   bool loadParams(void);
-  bool loadParamsV1(void);
+  bool loadParamsV2(size_t adresse);
+  bool loadParamsV2_cuves(size_t adresseBlocCuve, uint8_t nb_cuve);
 
   bool modifTempConsigne(int16_t& temp, int8_t add);
 
   bool modifieSonde(uint8_t cuve,SondeV2& s);
   bool modifieCuve(uint8_t cuve,CuveV2& c);
+
+  void readBlocPrincipal(size_t adresse);
 }
 
 

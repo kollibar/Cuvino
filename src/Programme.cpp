@@ -42,10 +42,6 @@ Programme::Programme() {
   defaut();
 }
 
-bool Programme::estRepetition() const {
-  if ( date == 0) return false;
-  return (bool)((date & 0x30000000) == 0x30000000);
-}
 
 bool Programme::setDate(RtcDateTime &date){
   this->date=date;
@@ -145,13 +141,13 @@ unsigned long Programme::decalage() const{
     case MODE_PROG_S:
       return (((this->date & 0x3FFFFF)+2*86400)%(7*86400));
     case MODE_PROG_H:
-      return (this->date & 0x3FFFFF);
+      return (this->date & 0x3FFFFF)%(60*60);
     case MODE_PROG_M:
-      return (this->date & 0x3FFFFF);
+      return (this->date & 0x3FFFFF)%((unsigned long)86400*30);
     case MODE_PROG_10M:
-      return (this->date & 0x3FFFFF);
+      return (this->date & 0x3FFFFF)%(60*10);
     case MODE_PROG_J:
-      return (this->date & 0x3FFFFF);
+      return (this->date & 0x3FFFFF)%((unsigned long)86400);
   }
 }
 
@@ -160,6 +156,7 @@ uint32_t Programme::precedent(RtcDateTime &now, plageHC_HP& HC_HP) {
 }
 
 uint32_t Programme::prochain(RtcDateTime &now, plageHC_HP& HC_HP, bool precedent) {
+  if( date == 0 ) return 0;
   RtcDateTime dateTime;
   if (this->estRepetition()) { // repetition
     switch (mode()) {
@@ -276,6 +273,12 @@ uint8_t Programme::mode(void) const{
   return MODE_PROG_NUL;
 }
 
+bool Programme::estRepetition() const {
+  if ( date == 0) return false;
+  return (bool)((date & 0x30000000) == 0x30000000);
+}
+
+
 /* structure d'un objet Programme lors de l'enregistrement (taille totale 10 octets)
   uint32_t date   4 octets
   uint8_t cuve    1 octet
@@ -283,18 +286,29 @@ uint8_t Programme::mode(void) const{
   reserve         3 octets
 */
 
-uint16_t Programme::save(uint16_t addr) const{
+uint16_t Programme::save(uint16_t addr, uint8_t version) const{
+  if( addr == 0xFFFF ) return 0xFFFF;
   addr = ecritEEPROM((uint8_t*)&this->date, 4, addr);
   addr = ecritEEPROM((uint8_t*)&this->cuve, 1, addr);
   addr = ecritEEPROM((uint8_t*)&this->temp, 2, addr);
-  addr = reserveEEPROM(3,addr);
+  if(version > 1 )   addr = ecritEEPROM((uint8_t*)&this->_mode, 1, addr);
+  else reserveEEPROM(1,addr);
+
+  addr = reserveEEPROM(2,addr);
   return addr;
 }
-uint16_t Programme::load(uint16_t addr){
+uint16_t Programme::load(uint16_t addr, uint8_t version){
+  if( addr == 0xFFFF ) {
+    defaut();
+    return 0xFFFF;
+  }
   addr = litEEPROM((uint8_t*)&this->date, 4, addr);
   addr = litEEPROM((uint8_t*)&this->cuve, 1, addr);
   addr = litEEPROM((uint8_t*)&this->temp, 2, addr);
-  addr+=3; // reserve 3 octets
+  if(version > 1 )     addr = litEEPROM((uint8_t*)&this->_mode, 1, addr);
+  else addr++; // reserve 1 octet
+
+  addr+=2; // reserve 2 octet
   return addr;
 }
 
@@ -303,6 +317,7 @@ void Programme::defaut(void){
   cuve = 0xFF;
   alarme = 0xFF;
   temp = TEMP_ARRET;
+  _mode = MODE_PROG_NUL;
 }
 
 size_t Programme::print(DebugLogger& debug){
@@ -318,15 +333,15 @@ size_t Programme::print(DebugLogger& debug){
   s+=debug.printPGM(FR::TXT_CUVE);
   s+=debug.print(':');
   s+=debug.print(this->cuve);
-  s+=debug.print(" estRepetion:");
+  s+=debug.print(F(" estRepetion:"));
   s+=debug.print(this->estRepetition());
-  s+=debug.print(" freqRepetition:");
+  s+=debug.print(F(" freqRepetition:"));
   s+=debug.print(this->freqRepetition());
   s+=debug.print(' ');
   s+=debug.printPGM(FR::TXT_MODE);
   s+=debug.print(':');
   s+=debug.print(this->mode());
-  s+=debug.print(" getDate:");
+  s+=debug.print(F(" getDate:"));
   s+=debug.print(this->getDate());
   return s;
 }
@@ -339,19 +354,19 @@ size_t Programme::println(DebugLogger& debug){
 
 
 size_t Programme::print(HardwareSerial& serial){
-  size_t s=serial.print("date:");
+  size_t s=serial.print(F("date:"));
   s+=serial.print(this->date,HEX);
-  s+=serial.print(" temp:");
+  s+=serial.print(F(" temp:"));
   s+=serial.print(this->temp,HEX);
-  s+=serial.print(" cuve:");
+  s+=serial.print(F(" cuve:"));
   s+=serial.print(this->cuve);
-  s+=serial.print(" estRepetion:");
+  s+=serial.print(F(" estRepetion:"));
   s+=serial.print(this->estRepetition());
-  s+=serial.print(" freqRepetition:");
+  s+=serial.print(F(" freqRepetition:"));
   s+=serial.print(this->freqRepetition());
-  s+=serial.print(" mode:");
+  s+=serial.print(F(" mode:"));
   s+=serial.print(this->mode());
-  s+=serial.print(" getDate:");
+  s+=serial.print(F(" getDate:"));
   s+=serial.print(this->getDate());
   return s;
 }
@@ -368,15 +383,15 @@ BlocMemProgramme::BlocMemProgramme() : BlocMem(0, 1, modeBlocMem_Close) {
 
 BlocMemProgramme::BlocMemProgramme(uint16_t addr) : BlocMem(addr, 1, modeBlocMem_LectureEcriture) {
 #ifdef DEBUG
-  Serial.print("BlocMemProgramme(");
+  Serial.print(F("BlocMemProgramme("));
   Serial.print(addr);
-  Serial.println(")");
-  Serial.print("mode:");
-  if( _mode==modeBlocMem_LectureEcriture) Serial.println("modeBlocMem_LectureEcriture");
-  else if( _mode==modeBlocMem_Lecture) Serial.println("modeBlocMem_Lecture");
-  else if( _mode==modeBlocMem_Ecriture) Serial.println("modeBlocMem_Ecriture");
-  else if( _mode==modeBlocMem_Erreur) Serial.println("modeBlocMem_Erreur");
-  else if( _mode==modeBlocMem_Close) Serial.println("modeBlocMem_Close");
+  Serial.println(')');
+  Serial.print(F("mode:"));
+  if( _mode==modeBlocMem_LectureEcriture) Serial.println(F("modeBlocMem_LectureEcriture"));
+  else if( _mode==modeBlocMem_Lecture) Serial.println(F("modeBlocMem_Lecture"));
+  else if( _mode==modeBlocMem_Ecriture) Serial.println(F("modeBlocMem_Ecriture"));
+  else if( _mode==modeBlocMem_Erreur) Serial.println(F("modeBlocMem_Erreur"));
+  else if( _mode==modeBlocMem_Close) Serial.println(F("modeBlocMem_Close"));
 #endif
   _numCharge = 0xFF; // aucun programme chargé
 
@@ -390,7 +405,7 @@ BlocMemProgramme::BlocMemProgramme(uint16_t addr) : BlocMem(addr, 1, modeBlocMem
   if ( _mode == modeBlocMem_LectureEcriture ) {
     if( _taille < TAILLE_ENTETE_BLOCMEM + TAILLE_DATA_ENTETE_BLOCMEMPROGRAMME ){
       #ifdef DEBUG
-      Serial.print("reaffectation taille => ");
+      Serial.print(F("reaffectation taille => "));
       Serial.println(TAILLE_ENTETE_BLOCMEM + TAILLE_DATA_ENTETE_BLOCMEMPROGRAMME);
       #endif
       _taille=TAILLE_ENTETE_BLOCMEM + TAILLE_DATA_ENTETE_BLOCMEMPROGRAMME;
@@ -400,16 +415,16 @@ BlocMemProgramme::BlocMemProgramme(uint16_t addr) : BlocMem(addr, 1, modeBlocMem
     _nb = (_taille - TAILLE_ENTETE_BLOCMEMPROGRAMME) / (TAILLE_MEM_PROGRAMME + 1);
 
 #ifdef DEBUG
-    Serial.print("->   ");
-    Serial.print("_taille=");
+    Serial.print(F("->   "));
+    Serial.print(F("_taille="));
     Serial.print(_taille);
-    Serial.print(" _addr=");
+    Serial.print(F(" _addr="));
     Serial.print(_addr);
-    Serial.print(" _mode=");
+    Serial.print(F(" _mode="));
     Serial.print((char)_mode);
-    Serial.print(" _curseur=");
+    Serial.print(F(" _curseur="));
     Serial.print(_curseur);
-    Serial.print(" _nb=");
+    Serial.print(F(" _nb="));
     Serial.println(_nb);
 #endif
     compacte();
@@ -431,22 +446,22 @@ bool BlocMemProgramme::setDateProchain(uint32_t date){
 }
 
 uint16_t BlocMemProgramme::adresseElt_EEPROM(uint8_t num) const{
-  if ( num >= _nb) return 0;
+  if ( num >= _nb) return 0xFFFF;
   /*#ifdef DEBUG
-  Serial.print("BlocMemProgramme->adresseElt_EEPROM(");
+  Serial.print(F("BlocMemProgramme->adresseElt_EEPROM("));
   Serial.print(num);
-  Serial.print("):");
+  Serial.print(F("):"));
   Serial.print(_addr + TAILLE_ENTETE_BLOCMEM + TAILLE_DATA_ENTETE_BLOCMEMPROGRAMME + ((TAILLE_MEM_PROGRAMME + 1) * num));
   #endif*/
   return (_addr + TAILLE_ENTETE_BLOCMEM + TAILLE_DATA_ENTETE_BLOCMEMPROGRAMME + ((TAILLE_MEM_PROGRAMME + 1) * num));
 }
 
 uint16_t BlocMemProgramme::adresseElt(uint8_t num) const{
-  if ( num >= _nb) return 0;
+  if ( num >= _nb) return 0xFFFF;
   /*#ifdef DEBUG
-  Serial.print("BlocMemProgramme->adresseElt(");
+  Serial.print(F("BlocMemProgramme->adresseElt("));
   Serial.print(num);
-  Serial.print("):");
+  Serial.print(F("):"));
   Serial.print(TAILLE_DATA_ENTETE_BLOCMEMPROGRAMME + ((TAILLE_MEM_PROGRAMME + 1) * num));
   #endif*/
   return (TAILLE_DATA_ENTETE_BLOCMEMPROGRAMME + ((TAILLE_MEM_PROGRAMME + 1) * num));
@@ -456,11 +471,11 @@ uint16_t BlocMemProgramme::adresseElt(uint8_t num) const{
 bool BlocMemProgramme::setAt(uint8_t num, const Programme &programme) {
   if ( num >= _nb) return false;
   #ifdef DEBUG
-  Serial.print("BlocMemProgramme->setAt(");
+  Serial.print(F("BlocMemProgramme->setAt("));
   Serial.print(num);
-  Serial.print(")   adresseElt:");
+  Serial.print(F(")   adresseElt:"));
   Serial.print(adresseElt_EEPROM(num));
-  Serial.print(" adresseCRC:");
+  Serial.print(F(" adresseCRC:"));
   Serial.print(adresseElt_EEPROM(num) + TAILLE_MEM_PROGRAMME);
   #endif
   // enregistrement du Programme
@@ -468,18 +483,18 @@ bool BlocMemProgramme::setAt(uint8_t num, const Programme &programme) {
   // calcul et enregistrement de la crc8
   if ( ! ecrit(crc8OneWireMemoire(adresseElt_EEPROM(num), TAILLE_MEM_PROGRAMME), adresseElt(num) + TAILLE_MEM_PROGRAMME)) return false;
   #ifdef DEBUG
-  Serial.print(" crc lue:");
+  Serial.print(F(" crc lue:"));
   Serial.print(lit8(adresseElt(num) + TAILLE_MEM_PROGRAMME));
-  Serial.print(" crc calculée:");
+  Serial.print(F(" crc calculée:"));
   Serial.println(crc8OneWireMemoire(adresseElt_EEPROM(num), TAILLE_MEM_PROGRAMME));
-  Serial.print("programme.date:");
+  Serial.print(F("programme.date:"));
   Serial.print(programme.date,HEX);
-  Serial.print(" programme.temp:");
+  Serial.print(F(" programme.temp:"));
   Serial.println(programme.temp);
   Programme prog_=Programme();
   prog_.load(adresseElt_EEPROM(num));
-  Serial.print(" - load - ");
-  Serial.print("prog_.");
+  Serial.print(F(" - load - "));
+  Serial.print(F("prog_."));
   prog_.println(Serial);
   #endif
   actualiseEntete();
@@ -499,15 +514,15 @@ bool BlocMemProgramme::getAt(uint8_t num, Programme &programme) {
     return true;
   }
   #ifdef DEBUG
-  Serial.print("BlocMemProgramme->getAt(");
+  Serial.print(F("BlocMemProgramme->getAt("));
   Serial.print(num);
-  Serial.print(")   adresseElt:");
+  Serial.print(F(")   adresseElt:"));
   Serial.print(adresseElt_EEPROM(num));
-  Serial.print(" adresseCRC:");
+  Serial.print(F(" adresseCRC:"));
   Serial.print(adresseElt_EEPROM(num) + TAILLE_MEM_PROGRAMME);
-  Serial.print(" crc lue:");
+  Serial.print(F(" crc lue:"));
   Serial.print(lit8(adresseElt(num)+ TAILLE_MEM_PROGRAMME));
-  Serial.print(" crc calculée:");
+  Serial.print(F(" crc calculée:"));
   Serial.println(crc8OneWireMemoire(adresseElt_EEPROM(num), TAILLE_MEM_PROGRAMME));
   #endif
 
@@ -524,42 +539,42 @@ bool BlocMemProgramme::getAt(uint8_t num, Programme &programme) {
 
 void BlocMemProgramme::compacte(void) {
 #ifdef DEBUG
-  Serial.println("BlocMemProgramme::compacte()");
+  Serial.println(F("BlocMemProgramme::compacte()"));
 #endif
   _nbOK = 0;
   uint8_t k = 0;
   for (uint8_t i = 0; i < _nb; ++i) {
 #ifdef DEBUG
-    Serial.print("test emplacement:");
+    Serial.print(F("test emplacement:"));
     Serial.println(i);
-    Serial.print("   crc lue:");
+    Serial.print(F("   crc lue:"));
     Serial.print(lit8(adresseElt(i) + TAILLE_MEM_PROGRAMME));
-    Serial.print("  crc calculée:");
+    Serial.print(F("  crc calculée:"));
     Serial.print(crc8OneWireMemoire(adresseElt_EEPROM(i), TAILLE_MEM_PROGRAMME));
     Programme prog_=Programme();
     prog_.load(adresseElt_EEPROM(i));
-    Serial.print(" - load - ");
-    Serial.print("prog_.");
+    Serial.print(F(" - load - "));
+    Serial.print(F("prog_."));
     prog_.print(Serial);
-    Serial.print( "lit32EEPROM():");
+    Serial.print(F("lit32EEPROM():"));
     Serial.println(lit32(adresseElt(i)));
 #endif
     if ( lit32( adresseElt(i)) != 0
       && crc8OneWireMemoire( adresseElt_EEPROM(i), TAILLE_MEM_PROGRAMME) == lit8(adresseElt(i) + TAILLE_MEM_PROGRAMME) ) { // l'emplacement est pris
 #ifdef DEBUG
-      Serial.println(" occupé");
+      Serial.println(F(" occupé"));
 #endif
       ++_nbOK;
       if (k != 0) k = 2; // il y a eu un trou entre 2 emplacement pris
     } else {
 #ifdef DEBUG
-      Serial.println(" libre");
+      Serial.println(F(" libre"));
 #endif
       if (k == 0) k = 1; //
     }
   }
 #ifdef DEBUG
-  Serial.print("_nbOK=");
+  Serial.print(F("_nbOK="));
   Serial.println(_nbOK);
 #endif
 
@@ -568,9 +583,9 @@ void BlocMemProgramme::compacte(void) {
   // k==2 => non compacté
   if ( k == 0 || k == 1) {
 #ifdef DEBUG
-    Serial.println("déjà compacté");
-    if ( k == 0) Serial.println("tout emplacement pris");
-    Serial.print("_nbOK=");
+    Serial.println(F("déjà compacté"));
+    if ( k == 0) Serial.println(F("tout emplacement pris"));
+    Serial.print(F("_nbOK="));
     Serial.println(_nbOK);
 #endif
     return; // déjà compacté
@@ -587,7 +602,7 @@ void BlocMemProgramme::compacte(void) {
           if ( setAt(j, _programme)) {
 #ifdef DEBUG
             Serial.print(i);
-            Serial.print("=>");
+            Serial.print(F("=>"));
             Serial.print(j);
 #endif
             ++_nbOK;
@@ -606,14 +621,14 @@ uint8_t BlocMemProgramme::alloc(uint8_t nb, bool reduit) {
   if ( nb > _nb) { // aggrandissement
 
     #ifdef DEBUG
-    Serial.print("aggrandissement (passage de ");
+    Serial.print(F("aggrandissement (passage de "));
     Serial.print(_nb);
-    Serial.print(" a ");
+    Serial.print(F(" a "));
     Serial.print(nb);
-    Serial.println(")");
-    Serial.print("Avant: taille=");
+    Serial.println(F(")"));
+    Serial.print(F("Avant: taille="));
     Serial.print(_taille);
-    Serial.print(" nb=");
+    Serial.print(F(" nb="));
     Serial.println(_nb);
     #endif
 
@@ -627,14 +642,14 @@ uint8_t BlocMemProgramme::alloc(uint8_t nb, bool reduit) {
 
   } else if ( reduit) { // reduction
     #ifdef DEBUG
-    Serial.print("reduction (passage de ");
+    Serial.print(F("reduction (passage de "));
     Serial.print(_nb);
-    Serial.print(" a ");
+    Serial.print(F(" a "));
     Serial.print(nb);
-    Serial.println(")");
-    Serial.print("Avant: taille=");
+    Serial.println(')');
+    Serial.print(F("Avant: taille="));
     Serial.print(_taille);
-    Serial.print(" nb=");
+    Serial.print(F(" nb="));
     Serial.println(_nb);
     #endif
     _taille = TAILLE_ENTETE_BLOCMEMPROGRAMME + nb * (TAILLE_MEM_PROGRAMME + 1);
@@ -642,9 +657,9 @@ uint8_t BlocMemProgramme::alloc(uint8_t nb, bool reduit) {
     actualiseEntete();
   }
   #ifdef DEBUG
-  Serial.print("Apres: taille=");
+  Serial.print(F("Apres: taille="));
   Serial.print(_taille);
-  Serial.print(" nb=");
+  Serial.print(F(" nb="));
   Serial.println(_nb);
   #endif
   return _nb;
@@ -654,19 +669,19 @@ uint8_t BlocMemProgramme::alloc(uint8_t nb, bool reduit) {
 bool BlocMemProgramme::delAt(uint8_t num, bool decal) {
   if ( num >= _nb) return false;
   #ifdef DEBUG
-  Serial.print("BlocMemProgramme->delAt(");
+  Serial.print(F("BlocMemProgramme->delAt("));
   Serial.print(num);
-  Serial.print(",");
+  Serial.print(',');
   Serial.print(decal);
-  Serial.println(")");
+  Serial.println(')');
   #endif
 
   while ( decal && num < _nbOK - 1) { // si celui que l'on supprime n'est pas le dernier!
     // alors on décale tout
     #ifdef DEBUG
-    Serial.print("decalage ");
+    Serial.print(F("decalage "));
     Serial.print(num+1);
-    Serial.print(" -> ");
+    Serial.print(F(" -> "));
     Serial.println(num);
     #endif
     getAt(num + 1, _programme);
@@ -674,11 +689,11 @@ bool BlocMemProgramme::delAt(uint8_t num, bool decal) {
   }
 
   #ifdef DEBUG
-  Serial.print("suppression @");
+  Serial.print(F("suppression @"));
   Serial.print(adresseElt(num));
-  Serial.print("(+");
+  Serial.print(F("(+"));
   Serial.print(_addr + TAILLE_ENTETE_BLOCMEM);
-  Serial.println(")");
+  Serial.println(')');
   #endif
   for (uint8_t i = 0; i < TAILLE_MEM_PROGRAMME + 1; ++i) ecrit((uint8_t)0, adresseElt(num) + i);
 
@@ -714,7 +729,9 @@ bool BlocMemProgramme::del(uint8_t num) {
 
 bool BlocMemProgramme::add(const Programme &programme) {
   if ( _nbOK >= _nb) return false;
-  return setAt(_nbOK++, programme);
+  bool result = setAt(_nbOK, programme);
+  if( result ) _nbOK++;
+  return result;
 }
 
 uint8_t BlocMemProgramme::_count() {
@@ -782,18 +799,19 @@ unsigned long BlocMemProgramme::decalage(uint8_t num){
 uint8_t BlocMemProgramme::prochain(RtcDateTime& now,uint8_t p){
   uint32_t proDate=0xFFFFFFFF;
   uint8_t pro=0xFF;
-  uint8_t i;
+  uint8_t i=0;
 
-  if( p==0xFF){
-    i=0;
-  } else if( p > _nbOK) return 0xFF;
+  if( _nbOK == 0 ) return 0xFF;
+
+  if( p >= _nbOK) return 0xFF;
   else {
     if( get(p,_programme)){
       i=p+1;
       if( now.TotalSeconds() == _programme.prochain(now,_HC_HP)){ // le programme n'est pas à la date donnée => recherche du suivant dans le temps
         now=RtcDateTime(_programme.prochain(now,_HC_HP)+1);
       }
-    } else return 0xFF;
+    }
+    else return 0xFF;
   }
 
   for (; i < _nbOK; ++i) {
@@ -815,6 +833,8 @@ uint8_t BlocMemProgramme::precedent(RtcDateTime& now,uint8_t p){
   uint32_t proDate = 0;
   uint8_t pro = 0xFF;
   uint8_t i=0;
+
+  if( _nbOK == 0 ) return 0xFF;
 
   if( p==0xFF){
     i=0;

@@ -19,8 +19,8 @@
 #define ADRESSE_VERSION_LOGICIEL_V0_1 5 // char
 
 void videEEPROM();
-uint16_t ecritEEPROM(byte *objet, uint16_t taille, uint16_t adresse);
-uint16_t litEEPROM(byte *objet, uint16_t taille, uint16_t adresse);
+uint16_t ecritEEPROM(const void* objet, uint16_t taille, uint16_t adresse);
+uint16_t litEEPROM(void *objet, uint16_t taille, uint16_t adresse);
 uint8_t lit8EEPROM(uint16_t adresse);
 uint32_t lit32EEPROM(uint16_t adresse);
 uint16_t crc16Memoire(uint16_t debut, uint16_t taille);

@@ -12,14 +12,14 @@
 #include <FreeRTOSVariant.h>
 #include <queue.h>
 #include <FreeRTOSConfig.h>
-#include <croutine.h>
-#include <StackMacros.h>
 #include <mpu_wrappers.h>
 #include <task.h>
 #include <portable.h>
 /** !FreeRTOS **/
 
-#include "EV2.h"
+#include <avr/eeprom.h>
+
+#include "EV3.h"
 #include "lang_fr.h"
 #include "Sonde.h"
 #include <BlocMem.h>
@@ -30,14 +30,15 @@
 #include "Cuve_DEBUG.h"
 #include "brochage.h"
 
+
 class Cuve {
   public:
     Sonde sonde;
     signed int tempConsigneCuve;
     byte nom;
 
-    ElectroVanne2 EV_F;
-    ElectroVanne2 EV_C;
+    ElectroVanne3 EV_F;
+    ElectroVanne3 EV_C;
 
     uint16_t save(uint16_t addr);
     bool save(BlocMem* bloc);
@@ -55,7 +56,7 @@ class Cuve {
     void print(HardwareSerial& serial);
     void print(DebugLogger&);
 
-    void begin(PileErreur& _pileErreur,Timer& _timer,OneWire& _ds,QueueHandle_t queueCmdeToCore,QueueHandle_t queueCmdeToTimer);
+    void begin(PileErreur& _pileErreur,Timer& _timer,OneWire& _ds,QueueHandle_t queueCmdeToCore,QueueHandle_t queueCmdeToTimer, MCP23S17* gpio);
     void initEV();
     Cuve &operator=(const Cuve &source);
     bool operator==(const Cuve &) const;

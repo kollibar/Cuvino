@@ -9,7 +9,7 @@
 #include "SondeV2.h"
 #include "Cuve.h"
 #include "CuveV2.h"
-#include "EV2.h"
+#include "EV3.h"
 #include <RtcDateTime.h>
 #include "const.h"
 #include "lang_fr.h"
@@ -39,11 +39,11 @@ public:
 
   Sonde* menuSelectSondeV3(const Sonde listeSondeExistante[],const unsigned char tailleListeSonde,OneWire& ds,signed char act=-1,bool interne=false,bool aucune=true);
 
-  retourSelect menuListeChoixEV(ElectroVanne2& EV, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH) ;
-  retourSelect menuListeChoixModeEV(ElectroVanne2& EV, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH) ;
+  retourSelect menuListeChoixEV(ElectroVanne3& EV, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH) ;
+  retourSelect menuListeChoixModeEV(ElectroVanne3& EV, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH) ;
 
-  bool menuConfigEV(ElectroVanne2& EV,uint8_t yMin = 8, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH);
-  bool menuManipuleEV(ElectroVanne2& EV,uint8_t yMin = 8, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH);
+  bool menuConfigEV(ElectroVanne3& EV,uint8_t yMin = 8, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH);
+  bool menuManipuleEV(ElectroVanne3& EV,uint8_t yMin = 8, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH);
   bool menuConfigSondeLocal(Cuve& cuve,const Cuve listeCuve[],const unsigned char tailleListeCuve);
 
   bool menuCalibrageSonde(SondeV2& sonde,const byte& nom_cuve);
@@ -762,14 +762,14 @@ bool CuvinoWidgets<T>::menuSelectSondeV2(Cuve& cuve,OneWire& ds) {
 }
 
 template <typename T>
-retourSelect CuvinoWidgets<T>::menuListeChoixEV(ElectroVanne2& EV, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax) {
-  uint8_t depart=EV.numero;
+retourSelect CuvinoWidgets<T>::menuListeChoixEV(ElectroVanne3& EV, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax) {
+  uint8_t depart=EV.getNumero() - 1;
   if( depart >= NB_EV_MAX) depart=0;
   return this->menuListeV2(_creeLigneMenuChoixEV, (void*)&EV, NB_EV_MAX + 1, 7, yMin, yMax, xMin, xMax, 1, depart, 1, 0, B10010000);
 }
 
 template <typename T>
-retourSelect CuvinoWidgets<T>::menuListeChoixModeEV(ElectroVanne2& EV, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax) {
+retourSelect CuvinoWidgets<T>::menuListeChoixModeEV(ElectroVanne3& EV, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax) {
   uint8_t n = sizeListeEV(); uint8_t depart=0;
 
   retourSelect result;
@@ -875,16 +875,16 @@ char CuvinoWidgets<T>::menuModifNom(char nom) {
 
 
 template <typename T>
-bool CuvinoWidgets<T>::menuManipuleEV(ElectroVanne2& EV,uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax){
+bool CuvinoWidgets<T>::menuManipuleEV(ElectroVanne3& EV,uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax){
   display->fillRect(xMin, yMin, xMax-xMin, yMax-yMin, WHITE);
 
   display->setCursor(xMin,yMin);
   display->printPGM(FR::TXT_EV);
   display->write(':');
-  display->println(EV.numero);
+  display->println(EV.getNumero());
   display->printPGM(FR::TXT_MODE);
   display->write(':');
-  display->printlnPGM(TXT_EV(EV.mode));
+  display->printlnPGM(TXT_EV(EV.getMode()));
   //display->print(EV.mode,BIN);
 
   retourSelect result;
@@ -928,7 +928,7 @@ bool CuvinoWidgets<T>::menuManipuleEV(ElectroVanne2& EV,uint8_t yMin, uint8_t yM
 
 
 template <typename T>
-bool CuvinoWidgets<T>::menuConfigEV(ElectroVanne2& EV,uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax){
+bool CuvinoWidgets<T>::menuConfigEV(ElectroVanne3& EV,uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax){
   // choix de l'electrovanne
   display->setCursor(xMin, yMin);
   display->printPGM(FR::TXT_SELECT);
@@ -943,11 +943,9 @@ bool CuvinoWidgets<T>::menuConfigEV(ElectroVanne2& EV,uint8_t yMin, uint8_t yMax
     // choix du mode de l'electrovanne
 
     if ( result.result == NB_EV_MAX) { // alors aucune electrovanne
-        EV.numero = 255;
-        EV.mode = EV_NON_CONFIGURE;
-        EV.tempsOuvertureVanne=0;
+        EV.defaut();
     } else {
-      uint8_t numero = result.result;
+      uint8_t numero = result.result + 1;
 
       display->fillRect(xMin,xMax-xMin,yMin,yMax-yMin,WHITE);
       display->printPGM(FR::TXT_SELECTION_MODE);
@@ -960,9 +958,7 @@ bool CuvinoWidgets<T>::menuConfigEV(ElectroVanne2& EV,uint8_t yMin, uint8_t yMax
       if(result.touche==TIMEOUT_LED) return false;
 
       if ( result.touche == (BT_BAS | BT_HAUT) || ((result.touche&TIMEOUT) != 0)) {
-        EV.mode = EV_NON_CONFIGURE;
-        EV.numero = 255;
-        EV.tempsOuvertureVanne=0;
+        EV.defaut();
       } else {
         /*#ifdef DEBUG
           Debug.print("CW:");
@@ -971,17 +967,12 @@ bool CuvinoWidgets<T>::menuConfigEV(ElectroVanne2& EV,uint8_t yMin, uint8_t yMax
           Debug.print(" => mode:");
           Debug.println(EVinListe(result.result),BIN);
         #endif*/
-        EV.mode = EVinListe(result.result);
-        EV.numero = numero;
-        EV.tempsOuvertureVanne=0;
-        EV.initEV();
+        
       }
-
-      if (EV.mode != EV_NON_CONFIGURE ){
+      uint8_t mode=EVinListe(result.result);
+      if ( mode != EV_NON_CONFIGURE ){
         if( ! this->menuManipuleEV(EV)){
-          EV.mode=EV_NON_CONFIGURE;
-          EV.numero=255;
-          EV.tempsOuvertureVanne=0;
+          EV.defaut();
           return false;
         }
 
@@ -990,20 +981,25 @@ bool CuvinoWidgets<T>::menuConfigEV(ElectroVanne2& EV,uint8_t yMin, uint8_t yMax
         display->printlnPGM(FR::TXT_ELECTROVANNE);
         display->printlnPGM(FR::TXT_EN_COURS);
         display->display();
-        uint8_t erreur=EV.testEV();
-        if (  erreur != 0) {
+        uint16_t erreur=ElectroVanne3::testEV(numero, mode);
+        if (  erreur < 0) {
           // si test de l'électrovanne échoué
-          EV.mode = EV_NON_CONFIGURE;
+          EV.defaut();
           display->clearDisplay();
           display->printlnPGM(FR::TXT_TEST_DE_L);
           display->printlnPGM(FR::TXT_ELECTROVANNE);
           display->printlnPGM(FR::TXT_ECHOUE);
           display->printPGM(FR::TXT_ERREUR);
           display->write(' ');
-          display->print(erreur);
+          display->print(-erreur);
+        } else {
+          EV.defaut();
+          EV.setMode(mode);
+          EV.setNumero(numero, true);
+          EV.initEV();
         }
       }
-      if (EV.mode != EV_NON_CONFIGURE ){
+      if (EV.getMode() != EV_NON_CONFIGURE ){
         // si test electrovanne réussi
         display->clearDisplay();
         display->printlnPGM(FR::TXT_TEST_DE_L);

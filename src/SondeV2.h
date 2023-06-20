@@ -12,18 +12,18 @@
 #include <FreeRTOSVariant.h>
 #include <queue.h>
 #include <FreeRTOSConfig.h>
-#include <croutine.h>
-#include <StackMacros.h>
 #include <mpu_wrappers.h>
 #include <task.h>
 #include <portable.h>
 /** !FreeRTOS **/
 
+#include <avr/eeprom.h>
+
 #include <OneWire.h>
 #include <broches.h>
 #include <RtcDS3231.h>
 #include <Wire.h>
-// #include <BlocMem.h>
+#include <BlocMem.h>
 #include <Timer.h>
 #include <Erreurs.h>
 #include <DebugLogger.h>
@@ -59,7 +59,7 @@ const signed char SONDE_DS3231 = -2;
 
 class SondeV2{
 public:
-  unsigned char addr[8];
+  
 
   //SondeV2();
   SondeV2(OneWire*, signed char num, unsigned char _addr[8]);
@@ -80,6 +80,7 @@ public:
   bool isSondeTemp();
   bool isDS3231();
   bool isDS18B20();
+  bool isSondeOK();
 
   void print(HardwareSerial& serial);
   void print(DebugLogger& debug);
@@ -90,19 +91,22 @@ public:
   bool save(BlocMem* bloc,unsigned char v=1);
   uint16_t load(uint16_t addr,unsigned char v=1);
   bool load(BlocMem* bloc,unsigned char v=1);
-  void defaut(void);*/
+  void defaut(void);
+  */
 
-  void begin(PileErreur& _pileErreur,Timer& _timer,QueueHandle_t queueCmdeToCore,QueueHandle_t queueCmdeToTimer);
+  static void begin(PileErreur& _pileErreur,Timer& _timer,QueueHandle_t queueCmdeToCore,QueueHandle_t queueCmdeToTimer);
 
   bool setPrecision(unsigned char precision);
   unsigned char getPrecision() const{return this->precision;}
 
   signed char num;
+  unsigned char addr[8];
 protected:
   signed int litTemperature(const bool correction = true,unsigned char n=0);
   void chercheAdresse();
   signed char a;
   signed char b;
+  uint8_t type;
   unsigned long date;
   unsigned char precision;
 

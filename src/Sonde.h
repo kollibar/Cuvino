@@ -12,12 +12,12 @@
 #include <FreeRTOSVariant.h>
 #include <queue.h>
 #include <FreeRTOSConfig.h>
-#include <croutine.h>
-#include <StackMacros.h>
 #include <mpu_wrappers.h>
 #include <task.h>
 #include <portable.h>
 /** !FreeRTOS **/
+
+#include <avr/eeprom.h>
 
 #include <OneWire.h>
 #include <broches.h>

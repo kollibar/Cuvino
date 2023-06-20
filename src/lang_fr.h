@@ -2,7 +2,10 @@
 #ifndef __LANG_FR_H__
 #define __LANG_FR_H__
 
+
+#include <avr/io.h>
 #include <avr/pgmspace.h>
+
 
 namespace FR{
   const char PROGMEM TXT_ERR_COMM_SONDE[] = "Erreur com.   avec sondes detemperature.";
@@ -51,6 +54,11 @@ namespace FR{
   const char PROGMEM TXT_CR05_A[]="CR-05-A";
   const char PROGMEM TXT_CR01[]="CR-01";
   const char PROGMEM TXT_CR01_MO[]="CR-01 M. Ouv.";
+  const char PROGMEM TXT_CR01_MF[]="CR-01 M. Fer.";
+  const char PROGMEM TXT_CR05_MO[]="CR-05 M. Ouv.";
+  const char PROGMEM TXT_CR05_MF[]="CR-05 M. Fer.";
+  const char PROGMEM TXT_CR01_M[]="CR-01 Maint.";
+  const char PROGMEM TXT_CR05_M[]="CR-05 Maint.";
   const char PROGMEM TXT_CR01modif[]="CR-01 modifiee";
   const char PROGMEM TXT_CR07[]="CR-07";
   const char PROGMEM TXT_EV_RELAI[]="Relai unique";

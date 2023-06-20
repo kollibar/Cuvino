@@ -134,6 +134,7 @@ void _creeLigneMenuSelectSondeV2(uint8_t i, char* chaine, uint8_t taille, void* 
 void _creeLigneMenuChoixEV(uint8_t i, char* chaine, uint8_t taille, void* arg) {
   if ( i == NB_EV_MAX) strcpy_P(chaine, FR::TXT_AUCUNE);
   else {
+    i+=1;// pour commencer l'affichage à 1 au lieu de 0
     if ( i < 10) chaine[0] = i + 48;
     else chaine[0] = i + 55;
     chaine[1] = 0;

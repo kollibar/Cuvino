@@ -28,7 +28,7 @@ uint16_t reserveEEPROM(uint16_t taille, uint16_t adresse){
   return adresse;
 }
 
-uint16_t ecritEEPROM(byte *objet, uint16_t taille, uint16_t adresse) {
+uint16_t ecritEEPROM(const void* objet, uint16_t taille, uint16_t adresse) {
 #ifdef DEBUG
   Serial.print("ecritEEPROM(objet@");
   Serial.print(uint16_t(objet), HEX);
@@ -40,7 +40,7 @@ uint16_t ecritEEPROM(byte *objet, uint16_t taille, uint16_t adresse) {
 #endif
   for ( uint16_t i = 0; i < taille; ++i) {
     // pour éviter trop d'écriture dans la même cellule
-    if ( EEPROM.read(adresse + i) != objet[i]) EEPROM.write(adresse + i, objet[i]);
+    EEPROM.update(adresse + i, *((byte*)objet + i));
 #ifdef DEBUG
     Serial.print(objet[i], HEX);
 #endif
@@ -69,7 +69,7 @@ uint16_t ecritEEPROM(byte *objet, uint16_t taille, uint16_t adresse) {
   return adresse + taille;
 }
 
-uint16_t litEEPROM(byte *objet, uint16_t taille, uint16_t adresse) {
+uint16_t litEEPROM(void* objet, uint16_t taille, uint16_t adresse) {
 #ifdef DEBUG
   Serial.print("litEEPROM(objet@");
   Serial.print(uint16_t(objet), HEX);
@@ -80,7 +80,7 @@ uint16_t litEEPROM(byte *objet, uint16_t taille, uint16_t adresse) {
   Serial.print(")=>");
 #endif
   for ( uint16_t i = 0;  i < taille; ++i) {
-    objet[i] = EEPROM.read(adresse + i);
+    *((byte*)objet + i) = EEPROM.read(adresse + i);
 #ifdef DEBUG
     Serial.print(objet[i], HEX);
 #endif

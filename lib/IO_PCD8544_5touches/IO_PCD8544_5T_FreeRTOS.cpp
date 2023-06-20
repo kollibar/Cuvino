@@ -176,6 +176,8 @@ void IO_PCD8544_5T_SPI_software_FreeRTOS::begin(uint8_t contrast, uint8_t bias){
   #endif
 }
 
+
+
 /*
 // widgets supplémentaires
 retourSelect IO_PCD8544_5T_FreeRTOS::menuListeOld(char* chaine, uint8_t nb, uint8_t taille, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax, uint8_t hLigne, uint8_t depart, uint8_t textSize, uint8_t actual, uint8_t permissions) {

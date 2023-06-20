@@ -68,15 +68,18 @@ bool Sonde::setPrecision(unsigned char _precision){
 }
 
 uint16_t Sonde::save(uint16_t addr) {
-  addr = ecritEEPROM((byte*)&(this->addr), 8, addr);
-  EEPROM.write(addr, a); ++addr;
-  EEPROM.write(addr, b); ++addr;
+  // addr = ecritEEPROM((byte*)&(this->addr), 8, addr);
+  // EEPROM.write(addr, a); ++addr;
+  // EEPROM.write(addr, b); ++addr;
+  eeprom_update_block(&this->addr, (void*)addr,8); addr+=8;
+  eeprom_update_byte((uint8_t*)addr,a);addr+=1;
+  eeprom_update_byte((uint8_t*)addr,b);addr+=1;
   #ifdef DEBUG
-  debugSonde.print("Sonde::save(addr=");
+  debugSonde.print(F("Sonde::save(addr="));
   debugSonde.print(addr);
-  debugSonde.print(") a=");
+  debugSonde.print(F(") a="));
   debugSonde.print(this->a);
-  debugSonde.print(", b=");
+  debugSonde.print(F(", b="));
   debugSonde.println(this->b);
   #endif
   return addr;
@@ -87,9 +90,9 @@ bool Sonde::save(BlocMem* bloc) {
   if ( ! bloc->ecrit((byte*)&a, 1)) return false;
   if ( ! bloc->ecrit((byte*)&b, 1)) return false;
   #ifdef DEBUG
-  debugSonde.print("Sonde::save(bloc) a=");
+  debugSonde.print(F("F(onde::save(bloc) a=")));
   debugSonde.print(this->a);
-  debugSonde.print(", b=");
+  debugSonde.print(F(", b="));
   debugSonde.println(this->b);
   #endif
   return true;
@@ -97,15 +100,19 @@ bool Sonde::save(BlocMem* bloc) {
 
 uint16_t Sonde::load(uint16_t addr) {
   defaut();
-  addr = litEEPROM((byte*)&(this->addr), 8, addr);
-  a = EEPROM.read(addr); ++addr;
-  b = EEPROM.read(addr); ++addr;
+  // addr = litEEPROM((byte*)&(this->addr), 8, addr);
+  // a = EEPROM.read(addr); ++addr;
+  // b = EEPROM.read(addr); ++addr;
+
+  eeprom_read_block((void*)&this->addr, (void*) addr, 8);addr+=8;
+  a=eeprom_read_byte((uint8_t*)addr);addr+=1;
+  b=eeprom_read_byte((uint8_t*)addr);addr+=1;
   #ifdef DEBUG
-  debugSonde.print("Sonde::load(addr=");
+  debugSonde.print(F("Sonde::load(addr="));
   debugSonde.print(addr);
-  debugSonde.print(") a=");
+  debugSonde.print(F(") a="));
   debugSonde.print(this->a);
-  debugSonde.print(", b=");
+  debugSonde.print(F(", b="));
   debugSonde.println(this->b);
   #endif
   return addr;
@@ -116,25 +123,25 @@ bool Sonde::load(BlocMem* bloc) {
   if ( ! bloc->lit((byte*)&a, 1)) return false;
   if ( ! bloc->lit((byte*)&b, 1)) return false;
   #ifdef DEBUG
-  debugSonde.print("Sonde::load(bloc) a=");
+  debugSonde.print(F("Sonde::load(bloc) a="));
   debugSonde.print(this->a);
-  debugSonde.print(", b=");
+  debugSonde.print(F(", b="));
   debugSonde.println(this->b);
   #endif
   return true;
 }
 
 void Sonde::print(HardwareSerial& serial){
-  serial.print("Sonde(");
+  serial.print(F("Sonde("));
   for(unsigned char i=0;i<8;++i) {
     if( addr[i]<16)serial.print(0);
     serial.print(addr[i],HEX);
   }
-  serial.print(")");
+  serial.print(')');
 }
 
 void Sonde::print(DebugLogger& debug){
-  debug.print("Sonde(");
+  debug.print(F("Sonde("));
   for(unsigned char i=0;i<8;++i) {
     if( addr[i]<16) debug.print(0);
     debug.print(addr[i],HEX);
@@ -234,9 +241,9 @@ signed int Sonde::getTemperature(const bool correction) {
 
 signed int Sonde::correctionMesure(signed int mesure){
   #ifdef DEBUG
-  debugSonde.print("correctionMesure(");
+  debugSonde.print(F("correctionMesure("));
   debugSonde.print(mesure);
-  debugSonde.print(")=>");
+  debugSonde.print(F(")=>"));
   #endif
   if( this->a != 0 ){
     mesure=(signed int)(((255+(signed long)a)*(signed long)mesure)/255);
@@ -246,9 +253,9 @@ signed int Sonde::correctionMesure(signed int mesure){
   }
   #ifdef DEBUG
   debugSonde.print(mesure);
-  debugSonde.print(" (a=");
+  debugSonde.print(F(" (a="));
   debugSonde.print(a);
-  debugSonde.print(", b=");
+  debugSonde.print(F(", b="));
   debugSonde.print(b);
   debugSonde.println(")");
   #endif
@@ -259,13 +266,13 @@ bool Sonde::calcCorrection(signed int mesure,signed int tempReelle){
   this->a=0;
   this->b=(signed char)(tempReelle-mesure);
   #ifdef DEBUG
-  debugSonde.print("calcCorrection(");
+  debugSonde.print(F("calcCorrection("));
   debugSonde.print(mesure);
-  debugSonde.print(",");
+  debugSonde.print(F(","));
   debugSonde.print(tempReelle);
-  debugSonde.print(")=>a=");
+  debugSonde.print(F(")=>a="));
   debugSonde.print(this->a);
-  debugSonde.print(",b=");
+  debugSonde.print(F(",b="));
   debugSonde.println(this->b);
   #endif
   return true;
@@ -274,17 +281,17 @@ bool Sonde::calcCorrection(signed int mesure1,signed int tempReelle1,signed int 
   this->a=(signed char)((255*tempReelle1-255*tempReelle1)/(mesure1-mesure2)-255);
   this->b=(signed char)(tempReelle1-(((255+(signed long)a)*mesure1)/255));
   #ifdef DEBUG
-  debugSonde.print("calcCorrection(");
+  debugSonde.print(F("calcCorrection(");
   debugSonde.print(mesure1);
-  debugSonde.print(",");
+  debugSonde.print(',');
   debugSonde.print(tempReelle1);
-debugSonde.print(",");
+debugSonde.print(',');
   debugSonde.print(mesure2);
-  debugSonde.print(",");
+  debugSonde.print(','');
   debugSonde.print(tempReelle2);
-  debugSonde.print(")=>a=");
+  debugSonde.print(F(")=>a="));
   debugSonde.print(this->a);
-  debugSonde.print(",b=");
+  debugSonde.print(F(",b="));
   debugSonde.println(this->b);
   #endif
   return true;

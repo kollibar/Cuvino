@@ -22,7 +22,7 @@ public:
 
   retourSelect menuListeOld(char* chaine, uint8_t nb, uint8_t taille = 15, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH, uint8_t hLigne = 1, uint8_t depart = 0, uint8_t textSize = 1, uint8_t actual = 0, uint8_t permissions = 0b10100000);  // pour ne pas supprimer le code si besoin
   retourSelect menuListe(char* chaine, uint8_t nb, uint8_t taille = 15, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH, uint8_t hLigne = 1, uint8_t depart = 0, uint8_t textSize = 1, uint8_t actual = 0, uint8_t permissions = 0b10100000); // pour compatibilité
-  retourSelect menuListeV2(void (*callback)(uint8_t, char*, uint8_t, void*), void* arg, uint8_t nb, uint8_t taille = 15, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH, uint8_t hLigne = 1, uint8_t depart = 0, uint8_t textSize = 1, uint8_t actual = 0, uint8_t permissions = 0b10100000);
+  retourSelect menuListeV2(void (*genChaine)(uint8_t, char*, uint8_t, void*), void* arg, uint8_t nb, uint8_t taille = 15, uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH, uint8_t hLigne = 1, uint8_t depart = 0, uint8_t textSize = 1, uint8_t actual = 0, uint8_t permissions = 0b10100000);
   retourSelect menuListeOuiNon(uint8_t yMin = 0, uint8_t yMax = LCDHEIGHT, uint8_t xMin = 0, uint8_t xMax = LCDWIDTH, uint8_t hLigne = 1, uint8_t depart = 0, uint8_t textSize = 1, uint8_t permissions = 0b10100000);
 
 
@@ -250,44 +250,53 @@ retourSelect Widgets<T>::menuListeOld(char* chaine, uint8_t nb, uint8_t taille, 
   return result;
 }
 
+/**   affiche une liste est retourne le numéro de l'item selectionné
+ * @param liste     un tableau de pointeur vers des chaine comprenant la chaine de caractère de l'item
+ * @param nb        nombre d'élément dans la liste principale
+ * @param taille    taille des élements de la chaine /!\ y compris le bit de fin de chaine /!\
+ * @param yMin      position de la liste dans l'écran yMin (par défaut 0)
+ * @param yMax      position de la liste dans l'écran yMax (par défaut bas de l'écran)
+ * @param xMin      position de la liste dans l'écran xMin (par défaut 0)
+ * @param xMax      position de la liste dans l'écran xMax (par défaut la droite de l'écran) 
+ * @param hLigne    hauteur de la ligne en nb de caractère (càd 1 car = 8 pixels de haut), par defaut 1
+ * @param depart    selection de départ
+ * @param textSize  
+ * @param actual
+ * @param permissions   indique les permissions pour quitter le menu (autre que sélection), par défaut TIMEOUT_LED & BT_ESC
+ * @return  le numéro de l'item selectionné
+        l/!\ si plusieurs lignes pour une chaine (càd hLigne!=0) compter un caractère en plus pour chaque ligne pour ajouter une fin de ligne
+  */
 template<typename T>
 retourSelect Widgets<T>::menuListe(char* chaine, uint8_t nb, uint8_t taille, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax, uint8_t hLigne, uint8_t depart, uint8_t textSize, uint8_t actual, uint8_t permissions) {
-  /*   affiche une liste est retourne le numéro de l'item selectionné
-        liste est un tableau de pointeur vers des chaine comprenant la chaine de caractère de l'item
-        nb est le nombre d'élément dans la liste principale
-        taille donne la taille des élements de la chaine /!\ y compris le bit de fin de chaine /!\
-        yMin est le point de départ de la liste en graphique (par défaut 0)
-        yMax est le bas de la liste (par défaut bas de l'écran)
-        xMin ... idem en X
-        xMax ... idem en X
-        hLigne est la hauteur de la ligne en nb de caractère (càd 1 car = 8 pixels de haut), par defaut 1
-        permissions indique les permissions pour quitter le menu (autre que sélection), par défaut TIMEOUT_LED & BT_ESC
-
-        /!\ si plusieurs lignes pour une chaine (càd hLigne!=0) compter un caractère en plus pour chaque ligne pour ajouter une fin de ligne
-  */
-
   return menuListeV2( _creeLigneMenuListeV1, (void*)chaine, nb, taille, yMin, yMax, xMin, xMax, hLigne, depart, textSize, actual, permissions);
 }
 
-
-template<typename T>
-retourSelect Widgets<T>::menuListeV2( void (*callback)(uint8_t, char*, uint8_t, void*), void* arg, uint8_t nb, uint8_t taille, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax, uint8_t hLigne, uint8_t depart, uint8_t textSize, uint8_t actual, uint8_t permissions) {
-  /*   affiche une liste est retourne le numéro de l'item selectionné
-        liste est un tableau de pointeur vers des chaine comprenant la chaine de caractère de l'item
-        nb est le nombre d'élément dans la liste principale
-        taille donne la taille des élements de la chaine /!\ y compris le bit de fin de chaine /!\
-        yMin est le point de départ de la liste en graphique (par défaut 0)
-        yMax est le bas de la liste (par défaut bas de l'écran)
-        xMin ... idem en X
-        xMax ... idem en X
-        hLigne est la hauteur de la ligne en nb de caractère (càd 1 car = 8 pixels de haut), par defaut 1
-        permissions indique les permissions pour quitter le menu (autre que sélection), par défaut TIMEOUT_LED & BT_ESC
-
-        /!\ si plusieurs lignes pour une chaine (càd hLigne!=0) compter un caractère en plus pour chaque ligne pour ajouter une fin de ligne
+/**   affiche une liste est retourne le numéro de l'item selectionné
+ * @param genChaine fonction générant les différentes chaines à afficher, recevant 4 paramètres: 
+ *                                  uint8_t position dans le menu,
+ *                                  char* pointeur vers la chaine où écrire les données, 
+ *                                  uint8_t taille de la chaine,
+ *                                  void* pointeur vers un argument supplémentaire (cf ligne suivante)
+ * @param arg       pointeur à passer à la fonction genChaine
+ * @param nb        nombre d'élément dans la liste principale
+ * @param taille    taille des élements de la chaine /!\ y compris le bit de fin de chaine /!\
+ * @param yMin      position de la liste dans l'écran yMin (par défaut 0)
+ * @param yMax      position de la liste dans l'écran yMax (par défaut bas de l'écran)
+ * @param xMin      position de la liste dans l'écran xMin (par défaut 0)
+ * @param xMax      position de la liste dans l'écran xMax (par défaut la droite de l'écran) 
+ * @param hLigne    hauteur de la ligne en nb de caractère (càd 1 car = 8 pixels de haut), par defaut 1
+ * @param depart    selection de départ
+ * @param textSize  
+ * @param actual
+ * @param permissions   indique les permissions pour quitter le menu (autre que sélection), par défaut TIMEOUT_LED & BT_ESC
+ * @return  le numéro de l'item selectionné
+        l/!\ si plusieurs lignes pour une chaine (càd hLigne!=0) compter un caractère en plus pour chaque ligne pour ajouter une fin de ligne
   */
+template<typename T>
+retourSelect Widgets<T>::menuListeV2( void (*genChaine)(uint8_t, char*, uint8_t, void*), void* arg, uint8_t nb, uint8_t taille, uint8_t yMin, uint8_t yMax, uint8_t xMin, uint8_t xMax, uint8_t hLigne, uint8_t depart, uint8_t textSize, uint8_t actual, uint8_t permissions) {
 #ifdef DEBUG
-  Serial.print("menuListeV2(callback@");
-  Serial.print((uint16_t)callback, HEX);
+  Serial.print("menuListeV2(genChaine@");
+  Serial.print((uint16_t)genChaine, HEX);
   Serial.print(", arg@");
   Serial.print((uint16_t)arg, HEX);
   Serial.print(", nb=");
@@ -352,7 +361,7 @@ retourSelect Widgets<T>::menuListeV2( void (*callback)(uint8_t, char*, uint8_t, 
     display->fillRect(xMin, yMin, xMax, yMax, WHITE);
     for (uint8_t i = 0; i < (nbLigneVisible + derniereLigne); ++i) {
 
-      callback(i + deb, chaine, taille, arg);
+      genChaine(i + deb, chaine, taille, arg);
 
       for (uint8_t j = 0; j < hLigne; ++j) {
         display->setCursor(xMin, yMin + (i * hLigne + j) * hautCarac);

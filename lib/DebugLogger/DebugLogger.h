@@ -51,6 +51,9 @@ public:
   bool setWriteMode(modeDEBUG mode){ modeWrite=mode;return true;};
   modeDEBUG getWriteMode() { return modeWrite;}
 
+  bool setOutputMode(modeDEBUG mode){this->master->setOutputMode(mode);};
+  modeDEBUG getOutputMode() { return this->master->getOutputMode();}
+
   size_t
     printNdigits(uint8_t nb,uint8_t n),
     printNdigits(uint16_t nb,uint8_t n),

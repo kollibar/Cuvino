@@ -5,21 +5,21 @@
 #include <broches.h>
 
 #ifndef PORT_CLAVIER
-  #define PORT_CLAVIER    PORTF
-  #define DDR_CLAVIER     DDRF
-  #define PIN_CLAVIER     PINF
-  #define MASQUE_CLAVIER  B11111000
+  #define PORT_CLAVIER    PORTK
+  #define DDR_CLAVIER     DDRK
+  #define PIN_CLAVIER     PINK
+  #define MASQUE_CLAVIER  0b01111100
 
-  #define BROCHE_CLAVIER_HAUT   A5
-  #define BIT_CLAVIER_HAUT      5
-  #define BROCHE_CLAVIER_BAS    A4
-  #define BIT_CLAVIER_BAS       4
-  #define BROCHE_CLAVIER_GAUCHE A3
-  #define BIT_CLAVIER_GAUCHE    3
-  #define BROCHE_CLAVIER_DROITE A6
-  #define BIT_CLAVIER_DROITE    6
-  #define BROCHE_CLAVIER_MENU A7
-  #define BIT_CLAVIER_MENU    7
+  #define BROCHE_CLAVIER_HAUT   A10
+  #define BIT_CLAVIER_HAUT      2
+  #define BROCHE_CLAVIER_BAS    A11
+  #define BIT_CLAVIER_BAS       3
+  #define BROCHE_CLAVIER_GAUCHE A12
+  #define BIT_CLAVIER_GAUCHE    4
+  #define BROCHE_CLAVIER_DROITE A13
+  #define BIT_CLAVIER_DROITE    5
+  #define BROCHE_CLAVIER_MENU A14
+  #define BIT_CLAVIER_MENU    6
 #endif
 
 class Clavier_5T:public Clavier{

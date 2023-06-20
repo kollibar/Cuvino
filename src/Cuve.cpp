@@ -10,21 +10,23 @@ OneWire* Cuve::ds=NULL;
 QueueHandle_t Cuve::qCmdeToCore=NULL;
 QueueHandle_t Cuve::qCmdeToTimer=NULL;
 
-void Cuve::begin(PileErreur& _pileErreur,Timer& _timer,OneWire& _ds,QueueHandle_t queueCmdeToCore,QueueHandle_t queueCmdeToTimer){
+void Cuve::begin(PileErreur& _pileErreur,Timer& _timer,OneWire& _ds,QueueHandle_t queueCmdeToCore,QueueHandle_t queueCmdeToTimer, MCP23S17* gpio){
   pileErreur=&_pileErreur;
   timer=&_timer;
   ds=&_ds;
   qCmdeToCore=queueCmdeToCore;
   qCmdeToTimer=queueCmdeToTimer;
-  this->EV_F.begin(_pileErreur,_timer,_ds,queueCmdeToCore,queueCmdeToTimer);
+  this->EV_F.begin(_pileErreur,_timer,queueCmdeToCore,queueCmdeToTimer, gpio);
   this->sonde.begin(_pileErreur,_timer,_ds,queueCmdeToCore,queueCmdeToTimer);
 }
 
 uint16_t Cuve::save(uint16_t addr) {
   addr = this->sonde.save(addr);
-  //addr = ecritEEPROM((byte*)&this->sonde.addr, 8, addr);
-  addr = ecritEEPROM((byte *)&this->tempConsigneCuve, 2, addr);
-  EEPROM.write(addr, this->nom); ++addr;
+  // //addr = ecritEEPROM((byte*)&this->sonde.addr, 8, addr);
+  // addr = ecritEEPROM((byte *)&this->tempConsigneCuve, 2, addr);
+  // EEPROM.write(addr, this->nom); ++addr;
+  eeprom_update_word((uint16_t*)addr, this->tempConsigneCuve);addr+=2;
+  eeprom_update_byte((uint8_t*)addr, this->nom);addr++;
   addr = this->EV_F.save(addr);
   addr = this->EV_C.save(addr);
   return addr;
@@ -43,9 +45,11 @@ bool Cuve::save(BlocMem* bloc) {
 uint16_t Cuve::load(uint16_t addr) {
   this->defaut();
   addr = this->sonde.load(addr);
-  //addr = litEEPROM((byte*)&this->sonde.addr, 8, addr);
-  addr = litEEPROM((byte*)&this->tempConsigneCuve, 2, addr);
-  this->nom = EEPROM.read(addr); ++addr;
+  // //addr = litEEPROM((byte*)&this->sonde.addr, 8, addr);
+  // addr = litEEPROM((byte*)&this->tempConsigneCuve, 2, addr);
+  // this->nom = EEPROM.read(addr); ++addr;
+  this->tempConsigneCuve = eeprom_read_word((uint16_t*)addr);addr+=2;
+  this->nom=eeprom_read_byte((uint8_t*)addr);addr+=1;
   addr = this->EV_F.load(addr);
   addr = this->EV_C.load(addr);
   return addr;
@@ -134,10 +138,10 @@ bool Cuve::controlTemp(int decalage){
   }
 
   if ( this->tempConsigneCuve  == TEMP_ARRET) { //si arrêt de la régulation
-    if ( this->EV_F.mode != EV_NON_CONFIGURE && this->EV_F.position != FERME) { // EV froid
+    if ( this->EV_F.getMode() != EV_NON_CONFIGURE && this->EV_F.getPosition() != FERME) { // EV froid
       this->EV_F.bougeEV(FERME);
     }
-    if ( this->EV_C.mode != EV_NON_CONFIGURE && this->EV_C.position != FERME) { // EV chaud
+    if ( this->EV_C.getMode() != EV_NON_CONFIGURE && this->EV_C.getPosition() != FERME) { // EV chaud
       this->EV_C.bougeEV(FERME);
     }
     return true;
@@ -167,17 +171,17 @@ bool Cuve::controlTemp(int decalage){
       debugCuve.print("  ");
       debugCuve.printPGM(FR::TXT_MODE);
       debugCuve.write(':');
-      debugCuve.printPGM(TXT_EV(this->EV_F.mode));
+      debugCuve.printPGM(TXT_EV(this->EV_F.getMode()));
       debugCuve.write('(');
-      debugCuve.print(this->EV_F.mode,BIN);
+      debugCuve.print(this->EV_F.getMode(),BIN);
       debugCuve.write(')');
       debugCuve.print(" / ");
       debugCuve.printPGM(FR::TXT_POSITION_ACTUELLE);
       debugCuve.write(':');
-      debugCuve.print(this->EV_F.position);
+      debugCuve.print(this->EV_F.getPosition());
       debugCuve.write('(');
-      if ( this->EV_F.position == OUVERT) debugCuve.printPGM(FR::TXT_OUVERT);
-      else if ( this->EV_F.position == FERME) debugCuve.printPGM(FR::TXT_FERME);
+      if ( this->EV_F.getPosition() == OUVERT) debugCuve.printPGM(FR::TXT_OUVERT);
+      else if ( this->EV_F.getPosition() == FERME) debugCuve.printPGM(FR::TXT_FERME);
       debugCuve.println(')');
 
       debugCuve.printPGM(FR::TXT_EV);
@@ -186,25 +190,25 @@ bool Cuve::controlTemp(int decalage){
       debugCuve.print("  ");
       debugCuve.printPGM(FR::TXT_MODE);
       debugCuve.write(':');
-      debugCuve.printPGM(TXT_EV(this->EV_C.mode));
+      debugCuve.printPGM(TXT_EV(this->EV_C.getMode()));
       debugCuve.write('(');
-      debugCuve.print(this->EV_C.mode,BIN);
+      debugCuve.print(this->EV_C.getMode(),BIN);
       debugCuve.write(')');
       debugCuve.print(" / ");
       debugCuve.printPGM(FR::TXT_POSITION_ACTUELLE);
       debugCuve.write(':');
-      debugCuve.print(this->EV_C.position);
+      debugCuve.print(this->EV_C.getPosition());
       debugCuve.write('(');
-      if ( this->EV_C.position == OUVERT) debugCuve.printPGM(FR::TXT_OUVERT);
-      else if ( this->EV_C.position == FERME) debugCuve.printPGM(FR::TXT_FERME);
+      if ( this->EV_C.getPosition() == OUVERT) debugCuve.printPGM(FR::TXT_OUVERT);
+      else if ( this->EV_C.getPosition() == FERME) debugCuve.printPGM(FR::TXT_FERME);
       debugCuve.println(')');
 #endif
 
-      if ( this->EV_F.mode != EV_NON_CONFIGURE) { // EV froid
+      if ( this->EV_F.getMode() != EV_NON_CONFIGURE) { // EV froid
         this->EV_F.etatEV();// actualise la position
-        if ( this->EV_C.mode != EV_NON_CONFIGURE) tempObj += _1_2_ECART_CHAUD_FROID; // si présence EV froid -> on compare par rapport à une température obj legèrement plus haut (d'1/2 ecart chaud froid)
+        if ( this->EV_C.getMode() != EV_NON_CONFIGURE) tempObj += _1_2_ECART_CHAUD_FROID; // si présence EV froid -> on compare par rapport à une température obj legèrement plus haut (d'1/2 ecart chaud froid)
 
-        if ( this->EV_F.position == OUVERT && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
+        if ( this->EV_F.getPosition() == OUVERT && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
           this->EV_F.bougeEV(FERME);
           #ifdef DEBUG
             debugCuve.printPGM(FR::TXT_FERMETURE);
@@ -213,7 +217,7 @@ bool Cuve::controlTemp(int decalage){
             debugCuve.write(' ');
             debugCuve.printPGM(FR::TXT_FROID);
           #endif
-        } else if ( this->EV_F.position == FERME && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
+        } else if ( this->EV_F.getPosition() == FERME && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
           this->EV_F.bougeEV(OUVERT);
           #ifdef DEBUG
           debugCuve.printPGM(FR::TXT_OUVERTURE);
@@ -225,11 +229,11 @@ bool Cuve::controlTemp(int decalage){
         }
       }
 
-      if ( this->EV_C.mode != EV_NON_CONFIGURE) { // EV chaud
+      if ( this->EV_C.getMode() != EV_NON_CONFIGURE) { // EV chaud
         this->EV_C.etatEV();// actualise la position
-        if ( this->EV_F.mode != EV_NON_CONFIGURE) tempObj -= (_1_2_ECART_CHAUD_FROID << 1); // si présence EV chaud -> on compare par rapport à une température obj legèrement plus bas (d'1/2 ecart chaud froid)
+        if ( this->EV_F.getMode() != EV_NON_CONFIGURE) tempObj -= (_1_2_ECART_CHAUD_FROID << 1); // si présence EV chaud -> on compare par rapport à une température obj legèrement plus bas (d'1/2 ecart chaud froid)
 
-        if ( this->EV_C.position == OUVERT && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
+        if ( this->EV_C.getPosition() == OUVERT && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
           this->EV_C.bougeEV(FERME);
           #ifdef DEBUG
           debugCuve.printPGM(FR::TXT_FERMETURE);
@@ -238,7 +242,7 @@ bool Cuve::controlTemp(int decalage){
           debugCuve.write(' ');
           debugCuve.printPGM(FR::TXT_CHAUD);
           #endif
-        }else if ( this->EV_C.position == FERME && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
+        }else if ( this->EV_C.getPosition() == FERME && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
           this->EV_C.bougeEV(OUVERT);
           #ifdef DEBUG
           debugCuve.printPGM(FR::TXT_OUVERTURE);

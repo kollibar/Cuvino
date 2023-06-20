@@ -11,7 +11,7 @@
 #define AFF_HEURE 0b00000010
 
 #define NB_MAX_GUI 1
-#define NB_MAX_FCT_MENU 4
+#define NB_MAX_FCT_MENU 6
 #define NB_MAX_FCT_ACT_AFF_TEMP 2
 
 #define POSITION_MENU_AVT 1

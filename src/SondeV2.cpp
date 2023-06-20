@@ -422,3 +422,7 @@ bool SondeV2::isDS3231(){
   return( num == SONDE_DS3231 );
   //return (num == SONDE_DS3231 && addr[0]=='D' && addr[1] == 'S' && addr[2] == '3' && addr[3] == '2' && addr[4] == '3' && addr[5] == '1' && addr[6] == 0);
 }
+
+bool SondeV2::isSondeOK(){
+  return (this->isDS18B20() );  // pour l'instant OK uniquement si ds18b20 => a améliorer
+}

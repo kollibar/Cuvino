@@ -1,19 +1,8 @@
 /** FreeRTOS **/
 #include <Arduino_FreeRTOS.h>
-#include <projdefs.h>
-#include <portmacro.h>
-#include <list.h>
-#include <timers.h>
-#include <event_groups.h>
 #include <semphr.h>
-#include <FreeRTOSVariant.h>
 #include <queue.h>
-#include <FreeRTOSConfig.h>
-#include <croutine.h>
-#include <StackMacros.h>
-#include <mpu_wrappers.h>
-#include <task.h>
-#include <portable.h>
+
 /** !FreeRTOS **/
 
 #include "main_DEBUG.h"
@@ -27,23 +16,34 @@
 #include "CuvinoProgramme.h"
 #include "Sonde.h"
 #include "SondeV2.h"
-#include "EV2.h"
+#include "EV3.h"
 #include "CuveV2.h"
 #include <Timer.h>
 #include <Erreurs.h>
 #include <IO_PCD8544_5T_FreeRTOS.h>
+#include <IO_PCD8544_5t_FreeRTOS_hardwarespi.h>
 #include <TerminalWindow.h>
 #include <avr/pgmspace.h>
 #include "fct_diverses.h"
 #include <avr/wdt.h>
 #include "brochage.h"
 
+#include <MCP23S17.h>
 
+#include "materiel.h"
 
+#define POS_ENREGISTREMENT_GENERAL  1
+#define POS_ENREGISTREMENT_CUVE     100
+#define POS_ENREGISTREMENT_PROGRAMMES 750
+
+const char PROGMEM CUVINO_SIGNATURE[]="CUVINO";
 
 #define DEBUG
 #define CLAVIER_FREERTOS
 
+ElectroVanne3* listeEV[NB_EV_MAX];
+
+MCP23S17 gpio=MCP23S17(&pinMCP23S17, 0x20);
 
 const unsigned char ERREUR_OFF=0;
 const unsigned char ERREUR_1=1;
@@ -60,12 +60,12 @@ DebugLogger debugProg=DebugLogger(DEBUG_Prog);
 DebugLogger debugCore=DebugLogger(DEBUG_Core);
 
 
+
 /* data de FreeRTOS */
 bool FreeRTOSActif = false;
 
 TaskHandle_t taskCore = NULL;
 TaskHandle_t taskGUI = NULL;
-//TaskTimer* taskTimer = NULL;
 TaskHandle_t taskTimer = NULL;
 TaskHandle_t taskKeyboard = NULL;
 TaskHandle_t taskProgramme = NULL;
@@ -80,7 +80,7 @@ SemaphoreHandle_t semaphoreAccesDataCore = NULL;
 const unsigned char TEMPS_MAX_ACCES_DATA_CORE_TICK = 2000 / portTICK_PERIOD_MS;
 
 /* data du Core */
-OneWire ds(BROCHE_ONEWIRE); // objet de contrôle de la connection au bus 1-Wire
+OneWire ds(A1); // objet de contrôle de la connection au bus 1-Wire
 
 RtcDS3231 Rtc; // objet de connection à l'horloge temps réel DS3231
 Timer timer;  // timer pour programmer des actions dans le futur
@@ -96,8 +96,13 @@ AdresseBloc adresseBloc;
 
 /* data de la GUI */
 #ifdef CLAVIER_FREERTOS
-IO_PCD8544_5T_SPI_software_FreeRTOS display=IO_PCD8544_5T_SPI_software_FreeRTOS(BROCHE_ECRAN_SCLK, BROCHE_ECRAN_SDIN, BROCHE_ECRAN_DC, BROCHE_ECRAN_CS, BROCHE_ECRAN_RESET);
-CuvinoWidgets<IO_PCD8544_5T_SPI_software_FreeRTOS> widgets=CuvinoWidgets<IO_PCD8544_5T_SPI_software_FreeRTOS>(display);
+// IO_PCD8544_5T_SPI_software_FreeRTOS display=IO_PCD8544_5T_SPI_software_FreeRTOS(BROCHE_ECRAN_SCLK, BROCHE_ECRAN_SDIN, BROCHE_ECRAN_DC, 5, BROCHE_ECRAN_RESET);
+// CuvinoWidgets<IO_PCD8544_5T_SPI_software_FreeRTOS> widgets=CuvinoWidgets<IO_PCD8544_5T_SPI_software_FreeRTOS>(display);
+// IO_PCD8544_5T_SPI_hardware_FreeRTOS display=IO_PCD8544_5T_SPI_hardware_FreeRTOS(38, 70, 40);
+// CuvinoWidgets<IO_PCD8544_5T_SPI_hardware_FreeRTOS> widgets=CuvinoWidgets<IO_PCD8544_5T_SPI_hardware_FreeRTOS>(display);
+
+IO_PCD8544_5T_SPI_hardware_FreeRTOS display=IO_PCD8544_5T_SPI_hardware_FreeRTOS(pinPCD8544,ResetPCD8544);
+CuvinoWidgets<IO_PCD8544_5T_SPI_hardware_FreeRTOS> widgets=CuvinoWidgets<IO_PCD8544_5T_SPI_hardware_FreeRTOS>(display);
 // TerminalWindow<IO_PCD8544_5T_SPI_software_FreeRTOS> terminal=TerminalWindow<IO_PCD8544_5T_SPI_software_FreeRTOS>(display);
 #else
 IO_PCD8544_5T_SPI_software display=IO_PCD8544_5T_SPI_software(BROCHE_ECRAN_SCLK, BROCHE_ECRAN_SDIN, BROCHE_ECRAN_DC, BROCHE_ECRAN_CS, BROCHE_ECRAN_RESET);
@@ -157,7 +162,9 @@ void CuvinoCore::initBroches() {
 #ifdef DEBUG
   debugCore.printlnPGM(DEBUG_initBroches);
 #endif
-  // initialisation des broches des relais
+  
+  // initialisation des pins de l'écran PCD8544
+  initPinPCD8544();
 
 #ifdef BIT_LED // si une broche de led intégré à la carte est définie
   DDR_LED |= (1 << BIT_LED); // met la broche connecté à la LED de la carte en sortie
@@ -167,8 +174,15 @@ void CuvinoCore::initBroches() {
 
 void CuvinoCore::init(){
   horlogeOK=false; // par defaut l'horloge n'est pas active
+
+  initMCP23S17(gpio);
+
+
+  // initialisation du "module" cuve (qui initialisera les "modules" sonde et electrovanne)
+  CuveV2::begin(pileErreur,timer,ds,queueCmdeToCore,queueCmdeToTimer, &gpio);
+
   CuvinoCore::initBroches();
-  CuvinoCore::initDS3231();
+  // CuvinoCore::initDS3231();
 }
 
 void CuvinoCore::demandeMesureTemperature() {
@@ -203,75 +217,6 @@ void CuvinoCore::controlTemp(void) {
     }
     for (unsigned char i = 0; i < NB_LIGNE_MAX; ++i) {
       listeCuve[i].controlTemp();
-      /*if (listeCuve[i].sonde.isSondeTemp()) {
-        listeCuve[i].sonde.demandeMesureTemp();
-        vTaskDelay(800 / portTICK_PERIOD_MS);
-        temp = listeCuve[i].sonde.getTemperature();
-      }
-      else if (listeCuve[i].sonde.addr[0] == 0) temp = TEMP_ERREUR_ABS_SONDE;
-      else temp = TEMP_ERREUR_PAS_SONDE;
-
-      tempObj = listeCuve[i].tempConsigneCuve;
-
-      if ( listeCuve[i].tempConsigneCuve  == TEMP_ARRET) { //si arrêt de la régulation
-        if ( listeCuve[i].EV_F.mode != EV_NON_CONFIGURE && listeCuve[i].EV_F.position != FERME) { // EV froid
-          listeCuve[i].EV_F.bougeEV(FERME);
-        }
-        if ( listeCuve[i].EV_C.mode != EV_NON_CONFIGURE && listeCuve[i].EV_C.position != FERME) { // EV chaud
-          listeCuve[i].EV_C.bougeEV(FERME);
-        }
-      } else if (listeCuve[i].tempConsigneCuve <= 2000 && listeCuve[i].tempConsigneCuve >= -880) { // si la température de consigne est comprise dans la plage du capteur
-        if (listeCuve[i].sonde.addr[0] == DS18B20) { //contrôle de la ligne en interronpant le froid
-
-  #ifdef DEBUG
-          debug.print("Ligne ");
-          debug.println(i);
-          debug.print("Temperature Objectif:");
-          debug.println(tempObj >> 4, DEC);
-          debug.print("Temperature Mesure:");
-          debug.println(temp >> 4, DEC);
-          debug.print("EV_F mode:");
-          debug.println(listeCuve[i].EV_F.mode);
-          debug.print("EV_F position actuelle:");
-          debug.print(listeCuve[i].EV_F.position);
-          if ( listeCuve[i].EV_F.position == OUVERT) debug.println("(Ouverte)");
-          else debug.println("(Fermée)");
-  #endif
-
-
-          if ( listeCuve[i].EV_F.mode != EV_NON_CONFIGURE) { // EV froid
-            if ( listeCuve[i].EV_C.mode != EV_NON_CONFIGURE) tempObj += _1_2_ECART_CHAUD_FROID; // si présence EV froid -> on compare par rapport à une température obj legèrement plus haut (d'1/2 ecart chaud froid)
-
-            if ( listeCuve[i].EV_F.position == OUVERT && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
-              listeCuve[i].EV_F.bougeEV(FERME);
-              #ifdef DEBUG
-                debug.println("Fermeture EV_F");
-              #endif
-            } else if ( listeCuve[i].EV_F.position == FERME && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
-              listeCuve[i].EV_F.bougeEV(OUVERT);
-              #ifdef DEBUG
-                debug.println("Ouverture EV_F");
-              #endif
-            }
-          }
-
-          if ( listeCuve[i].EV_C.mode != EV_NON_CONFIGURE) { // EV chaud
-            if ( listeCuve[i].EV_F.mode != EV_NON_CONFIGURE) tempObj -= (_1_2_ECART_CHAUD_FROID << 1); // si présence EV chaud -> on compare par rapport à une température obj legèrement plus bas (d'1/2 ecart chaud froid)
-
-            if ( listeCuve[i].EV_C.position == OUVERT && temp >= (tempObj + HISTERESIS_SIMPLE) ) {
-              listeCuve[i].EV_F.bougeEV(FERME);
-              #ifdef DEBUG
-                debug.println("Fermeture EV_C");
-              #endif
-            }else if ( listeCuve[i].EV_C.position == 0 && temp <= (tempObj - HISTERESIS_SIMPLE) ) {
-              listeCuve[i].EV_F.bougeEV(OUVERT);
-              #ifdef DEBUG
-                debug.println("Ouverture EV_C");
-              #endif
-            }
-          }
-        }
-      } */
     }
     xSemaphoreGive(semaphoreAccesDataCore);
   }
@@ -340,66 +285,58 @@ void CuvinoCore::reglageDefaut(void) {
       if ( i == NB_LIGNE_MAX) listeCuve[i].nom = 'L';
     }
     listeCuve[NB_LIGNE_MAX].tempConsigneCuve = TEMP_SONDE_LOCAL;
-    listeCuve[NB_LIGNE_MAX].EV_F.mode = EV_SONDE_LOCAL;
-
-    adresseBloc.cuves = 63;
-    adresseBloc.programmes = 350;
-    adresseBloc.principal = 1;
+    listeCuve[NB_LIGNE_MAX].EV_F.setMode(EV_SONDE_LOCAL);
 
     if( FreeRTOSActif ) xSemaphoreGive(semaphoreAccesDataCore);
   }
 }
 
-
-void CuvinoCore::saveParams(void) {
+size_t CuvinoCore::saveParamsV2_principal(size_t adresse, size_t adresseBlocCuves, size_t adresseBlocProgrammes){
   BlocMem bloc;
+// sauvegarde du bloc principal
+  bloc = BlocMem(adresse, 1, modeBlocMem_Ecriture);
+
+  bloc.ecrit((uint8_t)VERSION_LOGICIEL);
+  if( horlogeOK) bloc.ecrit((uint8_t*)&lastDate, 4);
+  else bloc.ecrit((uint32_t)0x1F314D80);
+  bloc.ecrit((uint8_t)NB_LIGNE_MAX);// nb de cuve TOTAL dans le bloc cuve (y-compris non configurées éventuellement)
+  bloc.ecrit((uint8_t)NB_PROGRAMME_MAX);// nb de programme TOTAL dans le bloc programme (y-compris non configurés éventuellement)
+  listeCuve[NB_LIGNE_MAX].save(&bloc);
+  bloc.reserve(7);
+  bloc.ecrit(adresseBlocCuves);
+  bloc.ecrit(adresseBlocProgrammes);
+  bloc.reserve(20);
+  bloc.actualiseEntete();
+
+
 #ifdef DEBUG
-  debugCore.printlnPGM(DEBUG_saveParams);
+  debugCore.setWriteMode(modeDebugComplet);
+  debugCore.printlnPGM(DEBUG_blocPrincipal);
+  debugCore.printPGM(DEBUG_CRC16_CALCULE);
+  debugCore.println(bloc.CRC16());
+  debugCore.printPGM(DEBUG_CRC16_LUE);
+  debugCore.println(bloc.CRC16lue());
+  debugCore.printPGM(DEBUG_adresseBloc);
+  debugCore.println(bloc.addr());
+  debugCore.printPGM(DEBUG_tailleBloc);
+  debugCore.println(bloc.taille());
+  debugCore.setWriteMode(modeDebug);
 #endif
 
-  if( FreeRTOSActif && ! xSemaphoreTake(semaphoreAccesDataCore, TEMPS_MAX_ACCES_DATA_CORE_TICK )){ // prend l'acces aux data du core
-    // AJOUTER GESTION ERREUR
-    return;
-  } else {
-    EEPROM.write(0, 1); // addresse version memoire : 0 , version memoire : 1
+  
+  CuvinoCore::readBlocPrincipal(adresse);
 
+  adresse = bloc.addrSuivant();
+  bloc.close();
 
-    adresseBloc.cuves = 63;
-    adresseBloc.programmes = 350;
+  return adresse;
+  
+}
 
-    // sauvegarde du bloc principal
-    bloc = BlocMem(adresseBloc.principal, 1, modeBlocMem_Ecriture);
+size_t CuvinoCore::saveParamsV2_cuves(size_t adresse){
+  BlocMem bloc;
 
-    bloc.ecrit((uint8_t)VERSION_LOGICIEL);
-    if( horlogeOK) bloc.ecrit((uint8_t*)&lastDate, 4);
-    else bloc.ecrit((uint32_t)0x1F314D80);
-    bloc.ecrit((uint8_t)NB_LIGNE_MAX);// nb de cuve TOTAL dans le bloc cuve (y-compris non configurées éventuellement)
-    bloc.ecrit((uint8_t)NB_PROGRAMME_MAX);// nb de programme TOTAL dans le bloc programme (y-compris non configurés éventuellement)
-    listeCuve[NB_LIGNE_MAX].save(&bloc);
-    bloc.reserve(7);
-    bloc.ecrit((uint8_t*)&adresseBloc.cuves, 2);
-    bloc.ecrit((uint8_t*)&adresseBloc.programmes, 2);
-    bloc.reserve(20);
-    bloc.actualiseEntete();
-
-  #ifdef DEBUG
-    debugCore.setWriteMode(modeDebugComplet);
-    debugCore.printlnPGM(DEBUG_blocPrincipal);
-    debugCore.printPGM(DEBUG_CRC16_CALCULE);
-    debugCore.println(bloc.CRC16());
-    debugCore.printPGM(DEBUG_CRC16_LUE);
-    debugCore.println(bloc.CRC16lue());
-    debugCore.printPGM(DEBUG_adresseBloc);
-    debugCore.println(bloc.addr());
-    debugCore.printPGM(DEBUG_tailleBloc);
-    debugCore.println(bloc.taille());
-    debugCore.setWriteMode(modeDebug);
-  #endif
-
-    bloc.close();
-
-    // sauvegarde du bloc Cuve
-    bloc.init(adresseBloc.cuves, 1, modeBlocMem_Ecriture);
+  bloc.init(adresse, 1, modeBlocMem_Ecriture);
   #ifdef DEBUG
     debugCore.setWriteMode(modeDebugComplet);
     debugCore.printlnPGM(DEBUG_blocCuve_Reinit);
@@ -429,14 +366,201 @@ void CuvinoCore::saveParams(void) {
       listeCuve[i].save(&bloc);
   #endif
     }
-    if( FreeRTOSActif ) xSemaphoreGive(semaphoreAccesDataCore);
 
     bloc.actualiseEntete();
+    #ifdef DEBUG
+      debugCore.setWriteMode(modeDebugComplet);
+      debugCore.printlnPGM(DEBUG_blocCuve);
+      debugCore.printPGM(DEBUG_CRC16_CALCULE);
+      debugCore.println(bloc.CRC16());
+      debugCore.printPGM(DEBUG_CRC16_LUE);
+      debugCore.println(bloc.CRC16lue());
+      debugCore.printPGM(DEBUG_adresseBloc);
+      debugCore.println(bloc.addr());
+      debugCore.printPGM(DEBUG_tailleBloc);
+      debugCore.println(bloc.taille());
+      debugCore.setWriteMode(modeDebug);
+    #endif
+    adresse = bloc.addrSuivant();
+    bloc.close();
+    return adresse;
+}
+
+void CuvinoCore::saveParams(){
+  CuvinoCore::saveParamsV2();
+}
+
+size_t CuvinoCore::saveParamsV2(size_t adresse) {
+  BlocMem bloc;
+#ifdef DEBUG
+  debugCore.printlnPGM(DEBUG_saveParams);
+#endif
+
+  if( FreeRTOSActif && ! xSemaphoreTake(semaphoreAccesDataCore, TEMPS_MAX_ACCES_DATA_CORE_TICK )){ // prend l'acces aux data du core
+    // AJOUTER GESTION ERREUR
+    return 0xFFFF;
+  } else {
+    BlocMem blocSignature;
+
+    #ifdef DEBUG
+    debugCore.println(F("+++Enregistrement Signature+++"));
+    #endif
+    
+    blocSignature=BlocMem(adresse,1,modeBlocMem_Ecriture);
+    blocSignature.ecritPGM(CUVINO_SIGNATURE);
+    debugCore.print(F("taille (CRC uniquement):"));
+    debugCore.println(blocSignature.taille());
+    // blocSignature.ecrit((uint8_t)VERSION_LOGICIEL);
+    // blocSignature.ecrit((uint8_t)VERSION_MEMOIRE);
+
+    blocSignature.ecrit((uint8_t)VERSION_LOGICIEL);
+    blocSignature.ecrit((uint8_t)VERSION_MEMOIRE);
+    debugCore.print(F("taille (totale):"));
+    debugCore.print(blocSignature.taille());
+
+
+    blocSignature.actualiseEntete();
+    size_t adresseBlocPrincipal = blocSignature.addrSuivant();
+    blocSignature.close();
+
+    #ifdef DEBUG
+    blocSignature=BlocMem(adresse,1,modeBlocMem_Lecture);
+    if( blocSignature.CRCValide() ){
+      debugCore.println(F("CRC ok"));
+    }
+    if( blocSignature.strcmp_P(CUVINO_SIGNATURE) ==0 ){
+      debugCore.println(F("Signature OK"));
+      uint8_t v;
+      //v=blocSignature.lit8();
+      blocSignature.lit(&v,1);
+      if( v != VERSION_LOGICIEL ) {
+        debugCore.print(F("erreur version logiciel:"));
+        debugCore.println(v);
+      }
+      v=blocSignature.lit8();
+      if( v != VERSION_MEMOIRE ){
+        debugCore.print(F("erreur version memoire:"));
+        debugCore.println(v);
+      }
+    } else {
+      debugCore.printlnPGM(DEBUG_signatureInvalide);
+    }
+    #endif
+
+    // sauvegarde des paramètres principaux
+    size_t adresseBlocCuve = saveParamsV2_principal(adresseBlocPrincipal);
+    #ifdef DEBUG
+    debugCore.print(F("adresse bloc cuve:"));
+    debugCore.print(adresseBlocCuve);
+    #endif
+
+    // sauvegarde du bloc Cuve
+    size_t adresseBlocProgramme=saveParamsV2_cuves(adresseBlocCuve);
+    #ifdef DEBUG
+    debugCore.print(F("adresse bloc programme:"));
+    debugCore.print(adresseBlocCuve);
+    #endif
+
+    // re sauvegarde des paramètres principaux (pour actualisation des adresses .cuves et .programmes)
+    saveParamsV2_principal(adresseBlocPrincipal, adresseBlocCuve, adresseBlocProgramme);
+
+    if( FreeRTOSActif ) xSemaphoreGive(semaphoreAccesDataCore);
   }
+}
+
+bool CuvinoCore::loadParams() {
 
 #ifdef DEBUG
+  debugCore.printlnPGM(DEBUG_loadParams);
+#endif
+  BlocMem blocSignature;
+
+  blocSignature=BlocMem(0,1,modeBlocMem_Lecture);
+  if( ! blocSignature.CRCValide() ){
+    // crc invalide
+    #ifdef DEBUG
+    debugCore.printlnPGM(DEBUG_CRCblocSignatureInvalide);
+    #endif
+    CuvinoCore::saveParams();
+    return false;
+  }
+  if( blocSignature.strcmp_P(CUVINO_SIGNATURE)  != 0 ){
+    // signature invalide => erreur
+    #ifdef DEBUG
+    debugCore.printlnPGM(DEBUG_signatureInvalide);
+    #endif
+    CuvinoCore::saveParams();
+    return false;
+  }
+  uint8_t v;
+  blocSignature.lit(&v,1);
+  #ifdef DEBUG
+    debugCore.printPGM(DEBUG_versionLogicielEcrit);
+    debugCore.println(v);
+  #endif
+
+  blocSignature.lit(&v,1);
+  #ifdef DEBUG
+    debugCore.printPGM(DEBUG_versionEnregistrementEEPROM);
+    debugCore.println(v);
+  #endif
+  size_t adresseBlocPrincipal = blocSignature.addrSuivant();
+  blocSignature.close();
+
+  switch (v) {
+    case 2:
+      return loadParamsV2(adresseBlocPrincipal);
+    default:
+#ifdef DEBUG
+      debugCore.printPGM(DEBUG_versionMemNonSupporte);
+      debugCore.print(v);
+      debugCore.println(')');
+      debugCore.printlnPGM(DEBUG_chargementImpossible);
+#endif
+      CuvinoCore::saveParams();
+      return false;
+  }
+}
+
+void CuvinoCore::readBlocPrincipal(size_t adresse){
+  debugCore.println(F("-------------------ReabBlocPrincipal-----------"));
+  BlocMem bloc;
+// sauvegarde du bloc principal
+  bloc = BlocMem(adresse, 1, modeBlocMem_Lecture);
+
+  uint8_t v;
+  bloc.lit(&v,1);
+  debugCore.print(F("Version memoire:"));
+  debugCore.println(v);
+  uint32_t u;
+  
+  bloc.lit(&u,4);
+  debugCore.print(F("horloge:"));
+  debugCore.println(u);
+
+  bloc.lit(&v,1);
+  debugCore.print(F("nb ligne max:"));
+  debugCore.println(v);
+
+  bloc.lit(&v,1);
+  debugCore.print(F("nb programme max:"));
+  debugCore.println(v);
+  
+  listeCuve[NB_LIGNE_MAX].load(&bloc);
+  bloc.reserve(7);
+
+  uint16_t a;
+  bloc.lit(&a, 2);
+  debugCore.print(F("adresse Cuves:"));
+  debugCore.println(a);
+  bloc.lit(&a, 2);
+  debugCore.print(F("adresse programmes:"));
+  debugCore.println(a);
+  
+  bloc.reserve(20);
+
   debugCore.setWriteMode(modeDebugComplet);
-  debugCore.printlnPGM(DEBUG_blocCuve);
+  debugCore.printlnPGM(DEBUG_blocPrincipal);
   debugCore.printPGM(DEBUG_CRC16_CALCULE);
   debugCore.println(bloc.CRC16());
   debugCore.printPGM(DEBUG_CRC16_LUE);
@@ -446,36 +570,92 @@ void CuvinoCore::saveParams(void) {
   debugCore.printPGM(DEBUG_tailleBloc);
   debugCore.println(bloc.taille());
   debugCore.setWriteMode(modeDebug);
-#endif
+
+
+
+  bloc.close();
 }
 
-bool CuvinoCore::loadParams() {
+bool CuvinoCore::loadParamsV2_cuves(size_t adresseBlocCuve, uint8_t nb_cuve){
+  // lecture du bloc Cuve
+
+  BlocMem bloc = BlocMem(adresseBlocCuve,1, modeBlocMem_Lecture);
 #ifdef DEBUG
-  debugCore.printlnPGM(DEBUG_loadParams);
+  debugCore.setWriteMode(modeDebugComplet);
+  debugCore.printlnPGM(DEBUG_blocCuve);
+  debugCore.printPGM(DEBUG_CRC16_LUE);
+  debugCore.println(bloc.CRC16lue());
+  debugCore.printPGM(DEBUG_CRC16_CALCULE);
+  debugCore.println(bloc.CRC16());
+  debugCore.printPGM(DEBUG_tailleBloc);
+  debugCore.println(bloc.taille());
+  debugCore.printPGM(DEBUG_adresseBloc);
+  debugCore.println(bloc.addr());
+  debugCore.printPGM(DEBUG_modeBloc);
+  debugCore.println((char)bloc.mode());
+  debugCore.printPGM(DEBUG_adresseBloc);
+  debugCore.println((uint8_t)bloc.getVersion());
+  debugCore.setWriteMode(modeDebug);
 #endif
-  switch (EEPROM.read(0)) {
-    case 1:
-      return loadParamsV1();
-    default:
+
+  if ( bloc.CRCValide() ) {
+    switch (bloc.getVersion()) {
+      case 1:
 #ifdef DEBUG
-      debugCore.printPGM(DEBUG_versionMemNonSupporte);
-      debugCore.print(EEPROM.read(0));
-      debugCore.println(')');
-      debugCore.printlnPGM(DEBUG_chargementImpossible);
+        debugCore.printPGM(FR::TXT_NB);
+        debugCore.write(' ');
+        debugCore.printPGM(FR::TXT_CUVE);
+        debugCore.write(':');
+        debugCore.println(nb_cuve);
 #endif
-      return false;
+        for (uint8_t i = 0; i < nb_cuve && i <= NB_LIGNE_MAX; ++i) {
+#ifdef DEBUG
+          debugCore.printPGM(FR::TXT_LOAD);
+          debugCore.write(' ');
+          debugCore.printPGM(FR::TXT_CUVE);
+          debugCore.write(' ');
+          debugCore.print(i);
+          debugCore.write(':');
+          debugCore.println(listeCuve[i].load(&bloc));
+#else
+          listeCuve[i].load(&bloc);
+#endif
+        }
+        return true;
+      default:
+#ifdef DEBUG
+        debugCore.printPGM(DEBUG_erreur_lecture_bloc);
+        debugCore.write(' ');
+        debugCore.printPGM(FR::TXT_CUVE);
+        debugCore.print(F(": "));
+        debugCore.printPGM(DEBUG_versionBlocNonSupporte);
+        debugCore.write('(');
+        debugCore.print(bloc.getVersion());
+        debugCore.println(')');
+#endif
+        return false;
+    }
+  } else {
+#ifdef DEBUG
+    debugCore.printPGM(DEBUG_erreur_lecture_bloc);
+    debugCore.write(' ');
+    debugCore.printPGM(FR::TXT_CUVE);
+    debugCore.print(F(": "));
+    debugCore.printPGM(DEBUG_blocIlisible_crc);
+#endif
+return false;
   }
 }
 
-bool CuvinoCore::loadParamsV1() {
+bool CuvinoCore::loadParamsV2(size_t addresseBlocPrincipal) {
 #ifdef DEBUG
   debugCore.printPGM(DEBUG_loadParams);
-  debugCore.println("V1.1");
+  debugCore.println(F("V1.1"));
 #endif
 
   uint8_t nb_cuve = 0, nb_programme = 0, version_logiciel, version;
 
-  BlocMem bloc = BlocMem(adresseBloc.principal, modeBlocMem_Lecture);
+  BlocMem bloc = BlocMem(addresseBlocPrincipal, modeBlocMem_Lecture);
 #ifdef DEBUG
   debugCore.setWriteMode(modeDebugComplet);
   debugCore.printlnPGM(DEBUG_blocPrincipal);
@@ -490,16 +670,19 @@ bool CuvinoCore::loadParamsV1() {
   debugCore.printPGM(DEBUG_modeBloc);
   debugCore.println((char)bloc.mode());
   debugCore.printPGM(DEBUG_adresseBloc);
-  debugCore.println((uint8_t)bloc.version());
+  debugCore.println((uint8_t)bloc.getVersion());
   debugCore.setWriteMode(modeDebug);
 #endif
+
+  readBlocPrincipal(addresseBlocPrincipal);
 
   if( FreeRTOSActif && ! xSemaphoreTake(semaphoreAccesDataCore, TEMPS_MAX_ACCES_DATA_CORE_TICK )){ // prend l'acces aux data du core
     // AJOUTER GESTION ERREUR
     return false;
   } else {
     if ( bloc.CRCValide() ) {
-      switch (bloc.version()) {
+      size_t adresseBlocCuve, adresseBlocProgramme;
+      switch (bloc.getVersion()) {
         case 1:
           bloc.lit((uint8_t*)&version_logiciel, 1);
           bloc.lit((uint8_t*)&lastDate, 4);
@@ -507,8 +690,8 @@ bool CuvinoCore::loadParamsV1() {
           bloc.lit((uint8_t*)&nb_programme, 1); // nb de programme TOTAL dans le bloc programme (y-compris non configurés éventuellement)
           listeCuve[NB_LIGNE_MAX].load(&bloc);
           bloc.reserve(7);
-          bloc.lit((uint8_t*)&adresseBloc.cuves, 2);
-          bloc.lit((uint8_t*)&adresseBloc.programmes, 2);
+          adresseBlocCuve = bloc.lit16();
+          adresseBlocProgramme = bloc.lit16();
           bloc.reserve(20);
           break;
         default:
@@ -516,91 +699,38 @@ bool CuvinoCore::loadParamsV1() {
           debugCore.printPGM(DEBUG_erreur_lecture_bloc);
           debugCore.write(' ');
           debugCore.printPGM(DEBUG_principal);
-          debugCore.print(": ");
+          debugCore.print(F(": "));
           debugCore.printPGM(DEBUG_versionBlocNonSupporte);
           debugCore.write('(');
-          debugCore.print(bloc.version());
+          debugCore.print(bloc.getVersion());
           debugCore.println(')');
   #endif
           break;
       }
+
+      #ifdef DEBUG
+      Serial.print(F("nb cuve:"));
+      Serial.println(nb_cuve);
+        Serial.print(F("adresse Cuve:"));
+        Serial.println(adresseBlocCuve);
+
+      #endif
+      CuvinoCore::loadParamsV2_cuves(adresseBlocCuve, nb_cuve);
+
+
+
     } else {
   #ifdef DEBUG
       debugCore.printPGM(DEBUG_erreur_lecture_bloc);
       debugCore.write(' ');
       debugCore.printPGM(DEBUG_principal);
-      debugCore.print(": ");
+      debugCore.print(F(": "));
       debugCore.printPGM(DEBUG_blocIlisible_crc);
+      debugCore.println();
   #endif
     }
 
-    // lecture du bloc Cuve
-
-    bloc = BlocMem(adresseBloc.cuves, modeBlocMem_Lecture);
-  #ifdef DEBUG
-    debugCore.setWriteMode(modeDebugComplet);
-    debugCore.printlnPGM(DEBUG_blocCuve);
-    debugCore.printPGM(DEBUG_CRC16_LUE);
-    debugCore.println(bloc.CRC16lue());
-    debugCore.printPGM(DEBUG_CRC16_CALCULE);
-    debugCore.println(bloc.CRC16());
-    debugCore.printPGM(DEBUG_tailleBloc);
-    debugCore.println(bloc.taille());
-    debugCore.printPGM(DEBUG_adresseBloc);
-    debugCore.println(bloc.addr());
-    debugCore.printPGM(DEBUG_modeBloc);
-    debugCore.println((char)bloc.mode());
-    debugCore.printPGM(DEBUG_adresseBloc);
-    debugCore.println((uint8_t)bloc.version());
-    debugCore.setWriteMode(modeDebug);
-  #endif
-
-    if ( bloc.CRCValide() ) {
-      switch (bloc.version()) {
-        case 1:
-  #ifdef DEBUG
-          debugCore.printPGM(FR::TXT_NB);
-          debugCore.write(' ');
-          debugCore.printPGM(FR::TXT_CUVE);
-          debugCore.write(':');
-          debugCore.println(nb_cuve);
-  #endif
-          for (uint8_t i = 0; i < nb_cuve && i < NB_LIGNE_MAX; ++i) {
-  #ifdef DEBUG
-            debugCore.printPGM(FR::TXT_LOAD);
-            debugCore.write(' ');
-            debugCore.printPGM(FR::TXT_CUVE);
-            debugCore.write(' ');
-            debugCore.print(i);
-            debugCore.write(':');
-            debugCore.println(listeCuve[i].load(&bloc));
-  #else
-            listeCuve[i].load(&bloc);
-  #endif
-          }
-          break;
-        default:
-  #ifdef DEBUG
-          debugCore.printPGM(DEBUG_erreur_lecture_bloc);
-          debugCore.write(' ');
-          debugCore.printPGM(FR::TXT_CUVE);
-          debugCore.print(": ");
-          debugCore.printPGM(DEBUG_versionBlocNonSupporte);
-          debugCore.write('(');
-          debugCore.print(bloc.version());
-          debugCore.println(')');
-  #endif
-          break;
-      }
-    } else {
-  #ifdef DEBUG
-      debugCore.printPGM(DEBUG_erreur_lecture_bloc);
-      debugCore.write(' ');
-      debugCore.printPGM(FR::TXT_CUVE);
-      debugCore.print(": ");
-      debugCore.printPGM(DEBUG_blocIlisible_crc);
-  #endif
-    }
+    
 
     if( FreeRTOSActif ) xSemaphoreGive(semaphoreAccesDataCore);
   }
@@ -614,6 +744,9 @@ bool CuvinoCore::modifTempConsigne(int16_t& temp, int8_t add) {
   else if ( temp < -1360 || temp > 2000) { // erreur   // la température de consigne est hors de la plage du capteur => on est dans un cas d'erreur
     return false;
   } else {
+    add=(add>0)?1:-1;
+    if( temp+add > 30*16) add=add*2*16;
+    else add=add*1*16;
     temp += add;
     if ( temp > TEMP_MAXI_CONSIGNE || temp < TEMP_MINI_CONSIGNE) temp = TEMP_ARRET;
   }
@@ -931,9 +1064,9 @@ void CuvinoGUI::actualiseEtatEV(){
   debugGUI.println(')');
   #endif
   #ifdef DEBUG
-    debugGUI.print("etatAffichage:");
+    debugGUI.print(F("etatAffichage:"));
     debugGUI.println(etatAffichage,BIN);
-    debugGUI.print("AFF_TEMP");
+    debugGUI.print(F("AFF_TEMP"));
     debugGUI.println(AFF_TEMP,BIN);
   #endif
   if ( (etatAffichage & AFF_TEMP ) == 0) return; // si pas d'affichage des temperatures -> quitte
@@ -953,9 +1086,9 @@ void CuvinoGUI::actualiseEtatEV(signed int i, signed int pos){
   #endif
 
   #ifdef DEBUG
-    debugGUI.print("etatAffichage:");
+    debugGUI.print(F("etatAffichage:"));
     debugGUI.println(etatAffichage,BIN);
-    debugGUI.print("AFF_TEMP");
+    debugGUI.print(F("AFF_TEMP"));
     debugGUI.println(AFF_TEMP,BIN);
   #endif
   if ( ((etatAffichage & AFF_TEMP ) == 0) || pos < 0 || pos >= nbLigneEcran) return; // si pas d'affichage des temperatures -> quitte
@@ -969,10 +1102,10 @@ void CuvinoGUI::actualiseEtatEV(signed int i, signed int pos){
   listeCuve[i].EV_F.etatEV();
 
   display.fillRect(p.x, p.y, 12, 5, WHITE);
-  if( listeCuve[i].EV_F.mode != EV_NON_CONFIGURE){
+  if( listeCuve[i].EV_F.getMode() != EV_NON_CONFIGURE){
     display.drawCharReduit(p.x, p.y, 'F', BLACK, WHITE);
     if( p.y < 24) display.drawLine(p.x, p.y+5, p.x+4, p.y+5, BLACK);
-    switch (listeCuve[i].EV_F.position) {
+    switch (listeCuve[i].EV_F.getPosition()) {
       case OUVERT:
         display.drawLine(p.x+6, p.y+2, p.x+10, p.y+2, BLACK);
         break;
@@ -980,7 +1113,7 @@ void CuvinoGUI::actualiseEtatEV(signed int i, signed int pos){
         display.drawLine(p.x+8, p.y+4, p.x+8, p.y, BLACK);
         break;
       default:
-        switch(listeCuve[i].EV_F.mvt_pos_fin){
+        switch(listeCuve[i].EV_F.getMvt_pos_fin()){
           case OUVERT:
             display.drawLine(p.x+6, p.y+1, p.x+10, p.y+3, BLACK);
             break;
@@ -994,10 +1127,10 @@ void CuvinoGUI::actualiseEtatEV(signed int i, signed int pos){
   }
   p.x+=15;
   display.fillRect(p.x, p.y, 12, 5, WHITE);
-  if( listeCuve[i].EV_C.mode != EV_NON_CONFIGURE){
+  if( listeCuve[i].EV_C.getMode() != EV_NON_CONFIGURE){
     display.drawCharReduit(p.x, p.y, 'C', BLACK, WHITE);
     if( p.y < 24) display.drawLine(p.x, p.y+5, p.x+4, p.y+5, BLACK);
-    switch (listeCuve[i].EV_C.position) {
+    switch (listeCuve[i].EV_C.getPosition()) {
       case OUVERT:
         display.drawLine(p.x+6, p.y+2, p.x+10, p.y+2, BLACK);
         break;
@@ -1005,7 +1138,7 @@ void CuvinoGUI::actualiseEtatEV(signed int i, signed int pos){
         display.drawLine(p.x+8, p.y+4, p.x+8, p.y, BLACK);
         break;
       default:
-        switch(listeCuve[i].EV_C.mvt_pos_fin){
+        switch(listeCuve[i].EV_C.getMvt_pos_fin()){
           case OUVERT:
             display.drawLine(p.x+6, p.y+1, p.x+10, p.y+3, BLACK);
             break;
@@ -1052,7 +1185,7 @@ void CuvinoGUI::actualiseAffTemp(signed int i, signed int pos){
   debugGUI.printPGM(DEBUG_etatAffichage);
   debugGUI.write(':');
   debugGUI.println(etatAffichage);
-  debugGUI.print("isSondeTemp:");
+  debugGUI.print(F("isSondeTemp:"));
   debugGUI.println(listeCuve[i].sonde->isSondeTemp());
   #endif
   if ( ((etatAffichage & AFF_TEMP ) == 0) || pos < 0 || pos >= nbLigneEcran) return; // si pas d'affichage des temperatures -> quitte
@@ -1140,7 +1273,7 @@ bool CuvinoGUI::menuConfiguration(void) {
     char chaine[15]="";
     if( addLignes[i].pos==POSITION_MENU_AVT){
       strcpy_P(chaine,addLignes[i].nomPGM);
-      debugGUI.print("|-> ");
+      debugGUI.print(F("|-> "));
       debugGUI.println(chaine);
     }
   }
@@ -1150,7 +1283,7 @@ bool CuvinoGUI::menuConfiguration(void) {
     char chaine[15]="";
     if( addLignes[i].pos==POSITION_MENU_APRES){
       strcpy_P(chaine,addLignes[i].nomPGM);
-      debugGUI.print("|-> ");
+      debugGUI.print(F("|-> "));
       debugGUI.println(chaine);
     }
   }
@@ -1447,7 +1580,7 @@ bool CuvinoGUI::menuConfigCuve(CuveV2& cuve) {
   data.temperature = TEMP_NON_LUE;
   data.y = 16;
   #ifdef DEBUG
-  debugGUI.println("-------------");
+  debugGUI.println(F("-------------"));
   cuve.print(debugGUI);
   debugGUI.println();
   #endif
@@ -1540,18 +1673,18 @@ bool CuvinoGUI::menuConfigCuve(CuveV2& cuve) {
   }
   timer.stop(data.timerID); //avant de quitter arrête le timer!
 
-  if ( ! cuve.sonde->isSondeTemp() && cuve.EV_F.mode == EV_NON_CONFIGURE) { // si sonde et electrovanne non configuré
+  if ( ! cuve.sonde->isSondeTemp() && cuve.EV_F.getMode() == EV_NON_CONFIGURE) { // si sonde et electrovanne non configuré
     cuve.tempConsigneCuve = TEMP_LIGNE_NON_CONFIGURE;
   } else if ( ! cuve.sonde->isSondeTemp() ) { // Sonde non configurée
     cuve.tempConsigneCuve = TEMP_SONDE_NON_CONFIGURE;
-  } else if (cuve.EV_F.mode == EV_NON_CONFIGURE) { // EV froid non configurée
+  } else if (cuve.EV_F.getMode() == EV_NON_CONFIGURE) { // EV froid non configurée
     cuve.tempConsigneCuve = TEMP_EV_NON_CONFIGURE;
   } else { // config OK !!
     cuve.tempConsigneCuve = TEMP_ARRET;
   }
 
   #ifdef DEBUG
-  debugGUI.println("-------------");
+  debugGUI.println(F("-------------"));
   cuve.print(debugGUI);
   debugGUI.println();
   #endif
@@ -1571,7 +1704,7 @@ void CuvinoGUI::_creeLigneMenuConfigCuve(uint8_t i, char* chaine, uint8_t taille
       break;
     case 1: // EV Froid
     case 2: // EV Chaud
-      ElectroVanne2 *EV;
+      ElectroVanne3 *EV;
       if ( i == 1) EV = &data->cuve->EV_F;
       else EV = &data->cuve->EV_C;
 
@@ -1579,10 +1712,10 @@ void CuvinoGUI::_creeLigneMenuConfigCuve(uint8_t i, char* chaine, uint8_t taille
       chaine[2] = ((i == 1) ? 'F' : 'C');
       chaine[3] = ' ';
 
-      if ( EV->numero < 36) chaine[4] = EV->numero + (( EV->numero < 10) ? 48 : 55);
+      if ( EV->getNumero() < 36) chaine[4] = EV->getNumero() + (( EV->getNumero() < 10) ? 48 : 55);
       else chaine[4] = ' ';
       chaine[5] = ' ';
-      strcpy_P(&chaine[6],TXT_EV(EV->mode));
+      strcpy_P(&chaine[6],TXT_EV(EV->getMode()));
       chaine[14] = 0;
       break;
     case 3:// modif nom
@@ -1611,7 +1744,7 @@ void CuvinoGUI::_creeLigneMenuConfigCuve(uint8_t i, char* chaine, uint8_t taille
 ***************************************/
 
 BlocMemProgramme blocProg;
-uint32_t prochainCuvinoProg=0;
+uint32_t prochainCuvinoProg=AUCUN_PROCHAIN_PROG;
 bool startCuvinoProg=false;
 uint32_t dateLancementCuvino=0;
 
@@ -1643,7 +1776,7 @@ void CuvinoProgramme::initProgramme(bool loadCuvino){
   }
 }
 
-void CuvinoProgramme::modifActualiseAffTemp(){
+void CuvinoProgramme::actualiseDateProchainProg(){
   if(  NB_LIGNE_MAX == 3 || (listeCuve[3].tempConsigneCuve == TEMP_LIGNE_NON_CONFIGURE && listeCuve[NB_LIGNE_MAX].sonde->isSondeTemp())){
     int8_t x,y;
     #if NB_LIGNE_MAX >= 2
@@ -1653,11 +1786,13 @@ void CuvinoProgramme::modifActualiseAffTemp(){
         x = (3 * 42) % 84 + 12;
         y = 26;
     #endif
-    display.setTextSize(0);
-    display.setCursor(x-12,y+7);
-    RtcDateTime dateTime=RtcDateTime(prochainCuvinoProg);
-    display.printTime(dateTime.Hour(),dateTime.Minute());
-    display.setTextSize(1);
+    if( prochainCuvinoProg != AUCUN_PROCHAIN_PROG){
+      display.setTextSize(0);
+      display.setCursor(x-12,y+7);
+      RtcDateTime dateTime=RtcDateTime(prochainCuvinoProg);
+      display.printTime(dateTime.Hour(),dateTime.Minute());
+      display.setTextSize(1);
+    }
   }
 }
 
@@ -1666,6 +1801,8 @@ void CuvinoProgramme::verifProchain(void){
   debugProg.printPGM(DEBUG_CuvinoProgramme);
   debugProg.printlnPGM(DEBUG_verifProchain);
   #endif
+  if(prochainCuvinoProg == AUCUN_PROCHAIN_PROG) return;
+
   if( horlogeOK ){ // heure valide
     if( ! startCuvinoProg ) { // si le module programme n'est pas déjà démarré
       CuvinoProgramme::initProgramme(false); // lancement du module, on précise que l'on est pas ds la séquence de démarrage
@@ -1766,8 +1903,8 @@ void CuvinoProgramme::programmeInterval(uint32_t debut,uint32_t fin,bool write){
       blocProg.setDateProchain(dateTime.TotalSeconds());
       prochainCuvinoProg=dateTime.TotalSeconds();
     } else {
-      prochainCuvinoProg=0xFFFFFFFF;
-      blocProg.setDateProchain(0xFFFFFFFF);
+      prochainCuvinoProg=AUCUN_PROCHAIN_PROG;
+      blocProg.setDateProchain(AUCUN_PROCHAIN_PROG);
     }
     blocProg.setDateDernierAcces(fin);
   }
@@ -1786,8 +1923,8 @@ void CuvinoProgramme::checkProchain(RtcDateTime& now){
     blocProg.setDateProchain(dateTime);
     prochainCuvinoProg=dateTime;
   } else {
-    prochainCuvinoProg=0xFFFFFFFF;
-    blocProg.setDateProchain(0xFFFFFFFF);
+    prochainCuvinoProg=AUCUN_PROCHAIN_PROG;
+    blocProg.setDateProchain(AUCUN_PROCHAIN_PROG);
   }
   blocProg.setDateDernierAcces(now.TotalSeconds());
 
@@ -1803,9 +1940,9 @@ bool CuvinoProgramme::menuConfigProgrammateur(void) {
   for (;;) {
     cmdeInterne cmde;
     #ifdef DEBUG
-    debugProg.print("alloc:");
+    debugProg.print(F("alloc:"));
     debugProg.print(blocProg.alloc());
-    debugProg.print("  count:");
+    debugProg.print(F("  count:"));
     debugProg.println(blocProg.count());
     #endif
 
@@ -1836,7 +1973,7 @@ bool CuvinoProgramme::menuConfigProgrammateur(void) {
       } else if( (result.result - ((blocProg.alloc() > blocProg.count())?1:0)) >= blocProg.count()){ // retour
         return true;
       } else { // modification d'un programme existant
-        blocProg.get(result.result - (blocProg.alloc() > blocProg.count())?1:0, programme);
+        blocProg.get(result.result - ((blocProg.alloc() > blocProg.count())?1:0), programme);
       }
 
       if ( regleProgramme(programme)) {
@@ -1930,7 +2067,7 @@ void CuvinoProgramme::_creeLigneMenuProgrammateur(uint8_t i, char* chaine, uint8
 
   blocProg.get(i, *programme);
   #ifdef DEBUG
-  debugProg.print("i:");
+  debugProg.print(F("i:"));
   debugProg.print(i);
   programme->println(Serial);
   #endif
@@ -2151,7 +2288,7 @@ bool CuvinoProgramme::regleProgramme(Programme& programme) {
     debugProg.print(dateTimeProg.Minute());
     debugProg.print(':');
     debugProg.print(dateTimeProg.Second());
-    debugProg.print(") ");
+    debugProg.print(F(") "));
     debugProg.printPGM(FR::TXT_MODE);
     debugProg.print(programme.mode(), HEX);
     debugProg.write(' ');
@@ -2177,7 +2314,7 @@ bool CuvinoProgramme::regleProgramme(Programme& programme) {
   debugProg.print(dateTimeProg.Minute());
   debugProg.print(':');
   debugProg.print(dateTimeProg.Second());
-  debugProg.print(") ");
+  debugProg.print(F(") "));
   debugProg.printPGM(FR::TXT_MODE);
   debugProg.print(programme.mode(), HEX);
   debugProg.write(' ');
@@ -2275,7 +2412,7 @@ void CuvinoProgramme::afficheLigneHC_HP(plageHC_HP plages, uint8_t n, int8_t y, 
   if ( plages.horaires[n * 2] % 2 == 0) display.write('0');
   display.print((plages.horaires[n * 2] % 2 ) * 30);
   if ( sel == 1) display.setTextColor(BLACK, WHITE);
-  display.print(" a ");
+  display.print(F(" a "));
   if ( sel == 2) display.setTextColor(WHITE, BLACK);
   display.print(plages.horaires[n * 2 + 1] / 2);
   display.write('H');
@@ -2323,6 +2460,8 @@ void cuvinoProgramme(void* arg){
     }
   }
 
+  TickType_t delai;
+  RtcDateTime now;
   for(;;){
     if( ! startCuvinoProg ){
       if( horlogeOK ) { // si module programme non démarré et horloge OK
@@ -2332,10 +2471,11 @@ void cuvinoProgramme(void* arg){
       }
     } else {
 
-      RtcDateTime now=Rtc.GetDateTime();
+      now=Rtc.GetDateTime();
 
+      if( prochainCuvinoProg != AUCUN_PROCHAIN_PROG) delai= (1000*(prochainCuvinoProg - now.TotalSeconds())) / portTICK_PERIOD_MS;
+      else delai = 30000;
 
-      TickType_t delai= (1000*(prochainCuvinoProg - now.TotalSeconds())) / portTICK_PERIOD_MS;
       #ifdef DEBUG
       debugProg.printPGM(FR::TXT_NOW);
       debugProg.write(':');
@@ -2379,8 +2519,8 @@ void cuvinoProgramme(void* arg){
               blocProg.setDateProchain(dateTime);
               prochainCuvinoProg=dateTime;
             } else {
-              prochainCuvinoProg=0xFFFFFFFF;
-              blocProg.setDateProchain(0xFFFFFFFF);
+              prochainCuvinoProg=AUCUN_PROCHAIN_PROG;
+              blocProg.setDateProchain(AUCUN_PROCHAIN_PROG);
             }
             blocProg.setDateDernierAcces(now.TotalSeconds());*/
             break;
@@ -2404,8 +2544,8 @@ void cuvinoProgramme(void* arg){
           blocProg.setDateProchain(dateTime);
           prochainCuvinoProg=dateTime;
         } else {
-          prochainCuvinoProg=0xFFFFFFFF;
-          blocProg.setDateProchain(0xFFFFFFFF);
+          prochainCuvinoProg=AUCUN_PROCHAIN_PROG;
+          blocProg.setDateProchain(AUCUN_PROCHAIN_PROG);
         }
         blocProg.setDateDernierAcces(now.TotalSeconds());*/
 
@@ -2510,6 +2650,8 @@ void cuvinoCore(void* arg){
     */
 
     //CuvinoProgramme::verifProchain(); // vérifie si appelle d'un nouveau programme
+    Serial.print(F("getTouche:"));
+    Serial.println(PORTK&0b01111100,BIN);
     CuvinoCore::controlTemp(); // algorithme d'ouverture/fermeture des vannes en fct de la température
 
     // envoi la commande d'actualisation de l'écran
@@ -2518,7 +2660,7 @@ void cuvinoCore(void* arg){
 
     //scheduler->sendMessage(taskTimer,new Message(code_cmde, cmdeActTouteTemp));
     #ifdef DEBUG
-    for(unsigned char i=0;i<6;++i){ // cas debug => 6 boucle de 2,5s càd 15s
+    for(unsigned char i=0;i<1;++i){ // cas debug => 6 boucle de 2,5s càd 15s
     #else
     for(unsigned char i=0;i<24;++i){ // cas normal => 12 boucle de 2,5s càd 60s
     #endif
@@ -2617,38 +2759,209 @@ void cuvinoTimer(void* arg){
   vTaskDelete(NULL);
 }
 
+const char PROGMEM TXT_AJOUTE_PROG[] = "PREPROG";
+const char PROGMEM TXT_START_PROG[] = "START PROG";
+
+bool startProgrammateur(void){
+  xTaskCreate(&cuvinoProgramme, (const char*)"CuvinoProgramme", 1000, 0, 1, &taskProgramme);
+  return true;
+}
+
+bool testAjouteProgrammePreprogramme(void){
+  Programme prog0, prog1;
+  prog0.set(MODE_PROG_H,1,600,2,16*2);
+  prog1.set(MODE_PROG_H,1,0,2,TEMP_ARRET);
+  if( blocProg.count() == 0){
+    blocProg.add(prog0);
+    blocProg.add(prog1);
+  }
+  return true;
+}
+
 void setup() {
-  wdt_disable(); // désactivation du chien de garde (en cas d'activation par le précédent code)
+  // désactivation du chien de garde (en cas d'activation par le précédent code)
+  wdt_disable();
+
+  
   #ifdef DEBUG
-  //Serial.begin(115200);
-  //Serial.begin(250000);
   Serial.begin(115200);
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
-
   Debug.setOutput(Serial);
-  debug.println("-------------------------------");
+  Debug.setOutputMode(modeDebugComplet);
+  debug.println(F("-------------------------------"));
   #endif
 
-  listeCuve[0].begin(pileErreur,timer,ds,queueCmdeToCore,queueCmdeToTimer);
+  // création des queues de communication intertaches
+  queueCmdeToCore = xQueueCreate(50,sizeof(char));
+  queueCmdeToTimer = xQueueCreate(10,sizeof(char));
+  queueCmdeToProgramme = xQueueCreate(10,sizeof(char));
+  semaphoreAccesDataCore = xSemaphoreCreateBinary();
 
   CuvinoCore::init();
+
+  DDRE |= (1<<7); // mise de la broche PE7 en sortie
+  PORTE |= (1<<7); // activation de la broche PE7
+/*
+  int8_t numero=5;
+  uint8_t mode = CR05;
+  Serial.print(F("etat EV 2:"));
+  ElectroVanne3::initBroches(numero,mode);
+  uint8_t pos=ElectroVanne3::etatEV(numero, mode);
+  Serial.print(pos);
+  if(pos==FERME) Serial.println(F("Ferme"));
+  else if(pos==OUVERT) Serial.println(F("Ouvert"));
+  else if( pos==0) Serial.println(F("partiel"));
+  else Serial.println(F("erreur ?"));
+
+  Serial.print(F("Ouverture"));
+  ElectroVanne3::demarreMvt(numero,mode,OUVERT);
+  Serial.print(F("PortH="));
+  Serial.print(PORTH,BIN);
+  Serial.print(F(" / DDRH="));
+  Serial.println(DDRH,BIN);
+  delay(10000);
+  Serial.print(F("Fermeture"));
+  ElectroVanne3::demarreMvt(numero,mode,FERME);
+  Serial.print(F("PortH="));
+  Serial.print(PORTH,BIN);
+  Serial.print(F(" / DDRH="));
+  Serial.println(DDRH,BIN);
+  delay(10000);
+  Serial.print(F("Ouverture"));
+  ElectroVanne3::demarreMvt(numero,mode,OUVERT);
+  Serial.print(F("PortH="));
+  Serial.print(PORTH,BIN);
+  Serial.print(F(" / DDRH="));
+  Serial.println(DDRH,BIN);
+  delay(10000);
+
+  Serial.print(F("test EV 2:"));
+  ElectroVanne3::testEV(numero,mode);
+
+  Serial.println(F("delay(10s)"));
+  delay(10000);
+
+*/
+
+
+/*
+  ElectroVanne3 listeEV[8];
+
+  for(uint8_t i=0;i<8;i++){
+    listeEV[i].setMode(CR05);
+    listeEV[i].setNumero(i+1);
+    listeEV[i].initEV();
+    listeEV[i].ferme();
+    delay(1000);
+  }
+
+  delay(10000);
+*/
+
+  
   CuvinoGUI::initGUI();
   CuvinoGUI::splashScreen();
+
+
+  
+/*
+  Serial.print(F("PortG"));
+  Serial.println(PORTG,BIN);
+
+  PORTG &= ~(1<<4);
+
+  Serial.print(F("PortG"));
+  Serial.println(PORTG,BIN);
+
+  Serial.print(F("gpio: IODIR="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->IODIR), BIN);
+
+  Serial.print(F("gpio: IPOL="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->IPOL), BIN);
+
+  Serial.print(F("gpio: GPINTEN="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->GPINTEN), BIN);
+
+  Serial.print(F("gpio: DEFVAL="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->DEFVAL), BIN);
+
+  Serial.print(F("gpio: INTCON="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->INTCON), BIN);
+
+  Serial.print(F("gpio: IOCON="));
+  Serial.println(gpio->gpioRegisterReadByte(gpio->IOCON), BIN);
+
+  Serial.print(F("gpio: GPPU="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->GPPU), BIN);
+
+  Serial.print(F("gpio: INTF="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->INTF), BIN);
+
+  Serial.print(F("gpio: INTCAP="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->INTCAP), BIN);
+
+  Serial.print(F("gpio: GPIO="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->GPIO), BIN);
+
+  Serial.print(F("gpio: OLAT="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->OLAT), BIN);
+
+  gpio->gpioRegisterWriteWord(gpio->IPOL,0);
+  Serial.print(F("gpio: IPOL="));
+  Serial.println(gpio->gpioRegisterReadWord(gpio->IPOL), BIN);
+
+
+  Serial.print(F("PortG"));
+  Serial.println(PORTG,BIN);
+
+  for(uint8_t n=0;n<255;n++){
+    Serial.println(F("Lecture ...."));
+    for(uint32_t r=0;r<0x1A;r++){
+      Serial.print(F("Reg"));
+      Serial.print(r);
+      Serial.print('=');
+      Serial.println(gpio->gpioRegisterReadByte(r));
+    }
+    delay(500);
+    Serial.println(F("Ecriture "));
+
+    for(uint8_t r=0x02;r<=0x03;r++){
+      Serial.print(F("Reg"));
+      Serial.print(r);
+      Serial.print('=');
+      Serial.print(gpio->gpioRegisterReadByte(r));
+      gpio->gpioRegisterWriteByte(r,gpio->gpioRegisterReadByte(r)+33);
+      Serial.print(F(" + 33 => "));
+      Serial.println(gpio->gpioRegisterReadByte(r));
+    }
+    delay(500);
+  }
+  
+  delay(10000);*/
+
+  
+
+  
+
   CuvinoCore::reglageDefaut();
   CuvinoCore::loadParams();
   CuvinoCore::initCuves();
-  CuvinoProgramme::loadProgramme();
+  // CuvinoProgramme::loadProgramme();
 
+  // activation de la broche ACT (PE7) pour activation des sorties puissances, y-compris L293D des electrovannes
+  DDRE |= (1<<7); // mise de la broche PE7 en sortie
+  PORTE |= (1<<7); // activation de la broche PE7
 
   CuvinoGUI::addLigneMenuConf(POSITION_MENU_APRES, FR::TXT_HC_HP,CuvinoProgramme::menuConfigurationHC_HP);
   CuvinoGUI::addLigneMenuConf(POSITION_MENU_APRES, FR::TXT_ERREURS, CuvinoErreurs::menuErreurs);
   CuvinoGUI::addLigneMenuConf(POSITION_MENU_AVT, FR::TXT_PROGRAMMATEUR,CuvinoProgramme::menuConfigProgrammateur);
-  CuvinoGUI::addModifActualiseAffTemp(CuvinoProgramme::modifActualiseAffTemp);
 
+  CuvinoGUI::addLigneMenuConf(POSITION_MENU_APRES, TXT_AJOUTE_PROG,testAjouteProgrammePreprogramme);
+  CuvinoGUI::addLigneMenuConf(POSITION_MENU_APRES, TXT_START_PROG,startProgrammateur);
 
-
+  CuvinoGUI::addModifActualiseAffTemp(CuvinoProgramme::actualiseDateProchainProg);
 
   // attente durant l'écran d'acceuil
   display.aucuneTouche();
@@ -2669,14 +2982,20 @@ void setup() {
 
   //timer.every(60000, CuvinoGUI::actualiseAffTemp);
 
-  queueCmdeToCore = xQueueCreate(50,sizeof(char));
-  queueCmdeToTimer = xQueueCreate(10,sizeof(char));
-  queueCmdeToProgramme = xQueueCreate(10,sizeof(char));
-  semaphoreAccesDataCore = xSemaphoreCreateBinary();
+  
+  
+
+  
+
+
+
+
+
+
   xTaskCreate(&cuvinoCore, (const char*)"CuvinoCore", 800, 0, 1, &taskCore);
   xTaskCreate(&cuvinoGUI, (const char*)"CuvinoGUI", 1200, 0, 1, &taskGUI);
   xTaskCreate(&cuvinoTimer, (const char*)"CuvinoTimer", 600, 0, 1, &taskTimer);
-  xTaskCreate(&cuvinoProgramme, (const char*)"CuvinoProgramme", 600, 0, 1, &taskProgramme);
+  //xTaskCreate(&cuvinoProgramme, (const char*)"CuvinoProgramme", 1000, 0, 1, &taskProgramme);
 
   #ifdef CLAVIER_FREERTOS
   display.startTask(taskGUI,200,configUSE_PORT_OPTIMISED_TASK_SELECTION,&taskKeyboard);
@@ -2696,6 +3015,11 @@ void setup() {
   debug.write(' ');
   debug.printlnPGM(DEBUG_scheduler);
   #endif
+
+
+
+
+
 }
 
 

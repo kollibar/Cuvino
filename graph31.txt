@@ -1,0 +1,43 @@
+|-- <FreeRTOS> 8.2.3
+|-- <BlocMem>
+|   |-- <EEPROM_fct>
+|   |   |-- <EEPROM> 2.0
+|-- <DebugLogger>
+|   |-- <PrintPGM>
+|-- <Erreurs>
+|-- <OneWire>
+|   |-- <FreeRTOS> 8.2.3
+|-- <EEPROM> 2.0
+|-- <EEPROM_fct>
+|   |-- <EEPROM> 2.0
+|-- <RTC by Makuna>
+|   |-- <Wire> 1.0
+|-- <Timer-master>
+|-- <Broches>
+|-- <Geometrie>
+|-- <Adafruit GFX Library - V1.0.2 NB8bits> 1.0.2
+|   |-- <PrintPGM>
+|-- <IO_PCD8544_5touches>
+|   |-- <Clavier>
+|   |   |-- <Broches>
+|   |-- <PCD8544>
+|   |   |-- <Adafruit GFX Library - V1.0.2 NB8bits> 1.0.2
+|   |   |   |-- <PrintPGM>
+|   |   |-- <SPI> 1.0
+|   |   |-- <Broches>
+|   |-- <FreeRTOS> 8.2.3
+|   |-- <Broches>
+|-- <Widgets>
+|   |-- <Adafruit GFX Library - V1.0.2 NB8bits> 1.0.2
+|   |   |-- <PrintPGM>
+|   |-- <IO_PCD8544_5touches>
+|   |   |-- <Clavier>
+|   |   |   |-- <Broches>
+|   |   |-- <PCD8544>
+|   |   |   |-- <Adafruit GFX Library - V1.0.2 NB8bits> 1.0.2
+|   |   |   |   |-- <PrintPGM>
+|   |   |   |-- <SPI> 1.0
+|   |   |   |-- <Broches>
+|   |   |-- <FreeRTOS> 8.2.3
+|   |   |-- <Broches>
+|-- <Wire> 1.0

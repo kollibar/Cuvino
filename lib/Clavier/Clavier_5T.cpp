@@ -17,6 +17,7 @@ uint8_t Clavier_5T::getToucheAct(bool valDerTouche) {
   // renvoi la valeur de la touche actuellement pressé
   uint8_t touche;
 
+
   //fctUpdate();
   if ( (PIN_CLAVIER & MASQUE_CLAVIER ) == MASQUE_CLAVIER ) return 0; // si aucune touche
 
@@ -45,7 +46,8 @@ uint8_t Clavier_5T::getToucheAct(bool valDerTouche) {
 bool Clavier_5T::aucuneTouche(bool attend) {
   // version optimisé pour Clavier_5T
   uint8_t touche;
-  if ( (PIN_CLAVIER & ( MASQUE_CLAVIER )) == 0) return true;
+  
+  if ( (PIN_CLAVIER & ( MASQUE_CLAVIER )) == MASQUE_CLAVIER ) return true;
 
   if (attend) {
     do {
